@@ -1,0 +1,23 @@
+# FastAPI and dependencies
+fastapi==0.104.1
+uvicorn[standard]==0.24.0
+
+# Database
+sqlalchemy==2.0.23
+sqlalchemy-utils==0.41.1
+asyncmy==0.2.9
+pydantic-settings==2.1.0
+alembic==1.13.1
+
+# Authentication
+python-jose[cryptography]==3.3.0
+passlib[bcrypt]==1.7.4
+python-multipart==0.0.6
+
+# Data processing
+pandas==1.5.3
+openpyxl==3.1.2
+reportlab>=3.6.0
+
+# Other
+python-dotenv==1.0.0

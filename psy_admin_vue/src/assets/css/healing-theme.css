@@ -1,0 +1,53 @@
+:root {
+  --bg-color: #f4f9f9; /* 奶油薄荷 */
+  --card-bg: #ffffff;
+  --text-main: #3a4a4a;
+  --text-sub: #7a8a8a;
+  --accent: #7db9d4; /* 雾灰蓝点缀 */
+  --shadow: 0 8px 16px rgba(125, 185, 212, 0.12);
+  --radius: 16px;
+  --transition: 0.3s ease-out;
+}
+
+body {
+  margin: 0;
+  font-family: "PingFang SC", "Helvetica Neue", sans-serif;
+  background: var(--bg-color);
+  color: var(--text-main);
+}
+/* 全局微动效 */
+* {
+  transition: background-color 0.25s, color 0.25s, border-color 0.25s;
+}
+button,
+.el-button {
+  transition: transform 0.15s;
+}
+button:active,
+.el-button:active {
+  transform: scale(0.97);
+}
+/* 治愈滚动条 */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+::-webkit-scrollbar-thumb {
+  background: var(--accent);
+  border-radius: 4px;
+}
+::-webkit-scrollbar-track {
+  background: var(--bg-color);
+}
+.el-button--primary {
+  background: var(--accent);
+  border-color: var(--accent);
+}
+.el-button--danger {
+  background: #e9897e;
+  border-color: #e9897e;
+}
+body {
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}

@@ -1,0 +1,81 @@
+2025-07-21 20:07:38,263 - sqlalchemy.engine.Engine - INFO - SELECT DATABASE()
+2025-07-21 20:07:38,263 - sqlalchemy.engine.Engine - INFO - [raw sql] {}
+2025-07-21 20:07:38,265 - sqlalchemy.engine.Engine - INFO - SELECT @@sql_mode
+2025-07-21 20:07:38,266 - sqlalchemy.engine.Engine - INFO - [raw sql] {}
+2025-07-21 20:07:38,266 - sqlalchemy.engine.Engine - INFO - SELECT @@lower_case_table_names
+2025-07-21 20:07:38,266 - sqlalchemy.engine.Engine - INFO - [raw sql] {}
+2025-07-21 20:07:38,268 - sqlalchemy.engine.Engine - INFO - BEGIN (implicit)
+2025-07-21 20:07:38,268 - sqlalchemy.engine.Engine - INFO - DESCRIBE `psy_test_db`.`users`
+2025-07-21 20:07:38,268 - sqlalchemy.engine.Engine - INFO - [raw sql] {}
+2025-07-21 20:07:38,274 - sqlalchemy.engine.Engine - INFO - DESCRIBE `psy_test_db`.`tests`
+2025-07-21 20:07:38,275 - sqlalchemy.engine.Engine - INFO - [raw sql] {}
+2025-07-21 20:07:38,277 - sqlalchemy.engine.Engine - INFO - DESCRIBE `psy_test_db`.`scores`
+2025-07-21 20:07:38,277 - sqlalchemy.engine.Engine - INFO - [raw sql] {}
+2025-07-21 20:07:38,280 - sqlalchemy.engine.Engine - INFO - DESCRIBE `psy_test_db`.`physiological_data`
+2025-07-21 20:07:38,280 - sqlalchemy.engine.Engine - INFO - [raw sql] {}
+2025-07-21 20:07:38,282 - sqlalchemy.engine.Engine - INFO - DESCRIBE `psy_test_db`.`admin_users`
+2025-07-21 20:07:38,283 - sqlalchemy.engine.Engine - INFO - [raw sql] {}
+2025-07-21 20:07:38,284 - sqlalchemy.engine.Engine - INFO - DESCRIBE `psy_test_db`.`login_logs`
+2025-07-21 20:07:38,284 - sqlalchemy.engine.Engine - INFO - [raw sql] {}
+2025-07-21 20:07:38,286 - sqlalchemy.engine.Engine - INFO - COMMIT
+2025-07-21 20:07:38,295 - sqlalchemy.engine.Engine - INFO - BEGIN (implicit)
+2025-07-21 20:07:38,298 - sqlalchemy.engine.Engine - INFO - SELECT admin_users.id AS admin_users_id, admin_users.username AS admin_users_username, admin_users.hashed_password AS admin_users_hashed_password 
+FROM admin_users 
+WHERE admin_users.username = %(username_1)s 
+ LIMIT %(param_1)s
+2025-07-21 20:07:38,298 - sqlalchemy.engine.Engine - INFO - [generated in 0.00063s] {'username_1': 'admin', 'param_1': 1}
+2025-07-21 20:07:38,300 - sqlalchemy.engine.Engine - INFO - ROLLBACK
+2025-07-21 20:09:36,427 - sqlalchemy.engine.Engine - INFO - SELECT DATABASE()
+2025-07-21 20:09:36,428 - sqlalchemy.engine.Engine - INFO - [raw sql] {}
+2025-07-21 20:09:36,430 - sqlalchemy.engine.Engine - INFO - SELECT @@sql_mode
+2025-07-21 20:09:36,430 - sqlalchemy.engine.Engine - INFO - [raw sql] {}
+2025-07-21 20:09:36,431 - sqlalchemy.engine.Engine - INFO - SELECT @@lower_case_table_names
+2025-07-21 20:09:36,431 - sqlalchemy.engine.Engine - INFO - [raw sql] {}
+2025-07-21 20:09:36,433 - sqlalchemy.engine.Engine - INFO - BEGIN (implicit)
+2025-07-21 20:09:36,433 - sqlalchemy.engine.Engine - INFO - DESCRIBE `psy_test_db`.`users`
+2025-07-21 20:09:36,433 - sqlalchemy.engine.Engine - INFO - [raw sql] {}
+2025-07-21 20:09:36,441 - sqlalchemy.engine.Engine - INFO - DESCRIBE `psy_test_db`.`tests`
+2025-07-21 20:09:36,442 - sqlalchemy.engine.Engine - INFO - [raw sql] {}
+2025-07-21 20:09:36,448 - sqlalchemy.engine.Engine - INFO - DESCRIBE `psy_test_db`.`scores`
+2025-07-21 20:09:36,448 - sqlalchemy.engine.Engine - INFO - [raw sql] {}
+2025-07-21 20:09:36,451 - sqlalchemy.engine.Engine - INFO - DESCRIBE `psy_test_db`.`physiological_data`
+2025-07-21 20:09:36,451 - sqlalchemy.engine.Engine - INFO - [raw sql] {}
+2025-07-21 20:09:36,453 - sqlalchemy.engine.Engine - INFO - DESCRIBE `psy_test_db`.`admin_users`
+2025-07-21 20:09:36,454 - sqlalchemy.engine.Engine - INFO - [raw sql] {}
+2025-07-21 20:09:36,456 - sqlalchemy.engine.Engine - INFO - DESCRIBE `psy_test_db`.`login_logs`
+2025-07-21 20:09:36,456 - sqlalchemy.engine.Engine - INFO - [raw sql] {}
+2025-07-21 20:09:36,459 - sqlalchemy.engine.Engine - INFO - COMMIT
+2025-07-21 20:09:36,472 - sqlalchemy.engine.Engine - INFO - BEGIN (implicit)
+2025-07-21 20:09:36,473 - sqlalchemy.engine.Engine - INFO - SELECT admin_users.id AS admin_users_id, admin_users.username AS admin_users_username, admin_users.hashed_password AS admin_users_hashed_password 
+FROM admin_users 
+WHERE admin_users.username = %(username_1)s 
+ LIMIT %(param_1)s
+2025-07-21 20:09:36,475 - sqlalchemy.engine.Engine - INFO - [generated in 0.00066s] {'username_1': 'admin', 'param_1': 1}
+2025-07-21 20:09:36,477 - sqlalchemy.engine.Engine - INFO - ROLLBACK
+2025-07-21 20:17:44,367 - sqlalchemy.engine.Engine - INFO - SELECT DATABASE()
+2025-07-21 20:17:44,368 - sqlalchemy.engine.Engine - INFO - [raw sql] {}
+2025-07-21 20:17:44,369 - sqlalchemy.engine.Engine - INFO - SELECT @@sql_mode
+2025-07-21 20:17:44,370 - sqlalchemy.engine.Engine - INFO - [raw sql] {}
+2025-07-21 20:17:44,370 - sqlalchemy.engine.Engine - INFO - SELECT @@lower_case_table_names
+2025-07-21 20:17:44,371 - sqlalchemy.engine.Engine - INFO - [raw sql] {}
+2025-07-21 20:17:44,372 - sqlalchemy.engine.Engine - INFO - BEGIN (implicit)
+2025-07-21 20:17:44,372 - sqlalchemy.engine.Engine - INFO - DESCRIBE `psy_test_db`.`users`
+2025-07-21 20:17:44,372 - sqlalchemy.engine.Engine - INFO - [raw sql] {}
+2025-07-21 20:17:44,378 - sqlalchemy.engine.Engine - INFO - DESCRIBE `psy_test_db`.`tests`
+2025-07-21 20:17:44,379 - sqlalchemy.engine.Engine - INFO - [raw sql] {}
+2025-07-21 20:17:44,380 - sqlalchemy.engine.Engine - INFO - DESCRIBE `psy_test_db`.`scores`
+2025-07-21 20:17:44,380 - sqlalchemy.engine.Engine - INFO - [raw sql] {}
+2025-07-21 20:17:44,381 - sqlalchemy.engine.Engine - INFO - DESCRIBE `psy_test_db`.`physiological_data`
+2025-07-21 20:17:44,382 - sqlalchemy.engine.Engine - INFO - [raw sql] {}
+2025-07-21 20:17:44,383 - sqlalchemy.engine.Engine - INFO - DESCRIBE `psy_test_db`.`admin_users`
+2025-07-21 20:17:44,383 - sqlalchemy.engine.Engine - INFO - [raw sql] {}
+2025-07-21 20:17:44,384 - sqlalchemy.engine.Engine - INFO - DESCRIBE `psy_test_db`.`login_logs`
+2025-07-21 20:17:44,384 - sqlalchemy.engine.Engine - INFO - [raw sql] {}
+2025-07-21 20:17:44,385 - sqlalchemy.engine.Engine - INFO - COMMIT
+2025-07-21 20:17:44,395 - sqlalchemy.engine.Engine - INFO - BEGIN (implicit)
+2025-07-21 20:17:44,397 - sqlalchemy.engine.Engine - INFO - SELECT admin_users.id AS admin_users_id, admin_users.username AS admin_users_username, admin_users.hashed_password AS admin_users_hashed_password 
+FROM admin_users 
+WHERE admin_users.username = %(username_1)s 
+ LIMIT %(param_1)s
+2025-07-21 20:17:44,397 - sqlalchemy.engine.Engine - INFO - [generated in 0.00037s] {'username_1': 'admin', 'param_1': 1}
+2025-07-21 20:17:44,399 - sqlalchemy.engine.Engine - INFO - ROLLBACK

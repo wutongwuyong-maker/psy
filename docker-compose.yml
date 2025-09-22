@@ -1,0 +1,76 @@
+version: '3.8'
+
+services:
+  # MySQL数据库
+  mysql:
+    image: mysql:8.0
+    container_name: psy_mysql
+    environment:
+      MYSQL_ROOT_PASSWORD: wzyis1204
+      MYSQL_DATABASE: psy_test_db
+      MYSQL_CHARACTER_SET_SERVER: utf8mb4
+      MYSQL_COLLATION_SERVER: utf8mb4_unicode_ci
+    ports:
+      - "3306:3306"
+    volumes:
+      - mysql_data:/var/lib/mysql
+      - ./mysql-init:/docker-entrypoint-initdb.d
+    command: --default-authentication-plugin=mysql_native_password
+    restart: unless-stopped
+
+  # 后端API服务
+  backend:
+    build:
+      context: ./psy_admin_fastapi
+      dockerfile: Dockerfile
+    container_name: psy_backend
+    environment:
+      - DATABASE_URL_NO_DB=mysql+pymysql://root:wzyis1204@mysql:3306/
+      - DB_NAME=psy_test_db
+      - SECRET_KEY=your-secret-key-here-must-be-long-and-random
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./psy_admin_fastapi:/app
+      - ./reports:/app/reports
+    depends_on:
+      - mysql
+    restart: unless-stopped
+    command: >
+      sh -c "
+        python3 migrate.py upgrade &&
+        python3 -m uvicorn main:app --host 0.0.0.0 --port 8000
+      "
+
+  # 前端服务
+  frontend:
+    build:
+      context: ./psy_admin_vue
+      dockerfile: Dockerfile
+    container_name: psy_frontend
+    environment:
+      - VUE_APP_API_BASE=http://localhost:8000
+    ports:
+      - "8080:80"
+    depends_on:
+      - backend
+    restart: unless-stopped
+
+  # Nginx反向代理（可选）
+  nginx:
+    image: nginx:alpine
+    container_name: psy_nginx
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx.conf:/etc/nginx/nginx.conf
+      - ./ssl:/etc/nginx/ssl
+    depends_on:
+      - frontend
+      - backend
+    restart: unless-stopped
+
+volumes:
+  mysql_data:
+

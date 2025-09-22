@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project version="4">
+  <component name="ProjectModuleManager">
+    <modules>
+<<<<<<< HEAD
+      <module fileurl="file://$PROJECT_DIR$/.idea/shiyanshi_laoshi.iml" filepath="$PROJECT_DIR$/.idea/shiyanshi_laoshi.iml" />
+=======
+      <module fileurl="file://$PROJECT_DIR$/.idea/psy_admin_fastapi.iml" filepath="$PROJECT_DIR$/.idea/psy_admin_fastapi.iml" />
+>>>>>>> 0862c3cdb25c35ae87f5d1113809dd4a5798316e
+    </modules>
+  </component>
+</project>

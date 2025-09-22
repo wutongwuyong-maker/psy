@@ -1,0 +1,10 @@
+Metadata-Version: 2.4
+Name: psy_admin
+Version: 0.1.0
+Summary: Psychological Assessment Administration System
+Author-email: Your Name <your.email@example.com>
+License-Expression: MIT
+Classifier: Programming Language :: Python :: 3
+Classifier: Operating System :: OS Independent
+Requires-Python: >=3.10
+Description-Content-Type: text/markdown

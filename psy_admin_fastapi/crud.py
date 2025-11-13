@@ -69,12 +69,15 @@ def create_student(db: Session, student: schemas.StudentCreate):
 
 def batch_create_students(db: Session, students: List[schemas.ExcelImportSchema]):
     """批量创建学生"""
-    db_students = [models.Student(**s.dict()) for s in students]
+    # 为每个学生添加 created_at 字段
+    db_students = []
+    for student in students:
+        student_data = student.dict()
+        student_data['created_at'] = datetime.utcnow()  # 添加创建时间
+        db_students.append(models.Student(**student_data))
+    
     db.bulk_save_objects(db_students)
     db.commit()
-    # 刷新获取完整数据
-    for s in db_students:
-        db.refresh(s)
     return db_students
 
 def update_student(db: Session, student_id: str, student_update: schemas.StudentUpdate):
@@ -93,11 +96,26 @@ def update_student(db: Session, student_id: str, student_update: schemas.Student
     return db_student
 
 def delete_student(db: Session, student_id: str):
-    """删除学生"""
+    """删除学生及其相关数据"""
     db_student = get_student(db, student_id)
     if not db_student:
         return False
     
+    # 先删除相关的检测记录
+    from psy_admin_fastapi.models import Test, Score, PhysiologicalData
+    
+    # 获取该学生的所有检测记录
+    tests = db.query(Test).filter(Test.student_fk_id == db_student.id).all()
+    
+    for test in tests:
+        # 删除检测记录相关的得分数据
+        db.query(Score).filter(Score.test_fk_id == test.id).delete()
+        # 删除检测记录相关的生理数据
+        db.query(PhysiologicalData).filter(PhysiologicalData.test_fk_id == test.id).delete()
+        # 删除检测记录
+        db.delete(test)
+    
+    # 最后删除学生记录
     db.delete(db_student)
     db.commit()
     return True
@@ -162,44 +180,93 @@ def create_test_data(db: Session, test_data: schemas.TestDataUpload):
             student_id=test_data.student_id,
             name=test_data.name,
             gender=test_data.gender,
-            class_name="未知班级"  # 默认班级，可以后续更新
+            class_name=getattr(test_data, 'class_name', None) or "未知班级"  # 使用提供的班级或默认值
         )
         db.add(student)
         db.flush()
 
-    # 科学的异常判断逻辑
-    def is_score_abnormal(score, module_name):
-        """判断单个得分是否异常"""
-        if score is None:
-            return False
-        
-        # 基础阈值
-        base_thresholds = {
-            "焦虑": 15,
-            "抑郁": 15, 
-            "压力": 15
+    # 兼容新旧结构的问卷得分
+    score_items = {
+        "学习焦虑": getattr(test_data.questionnaire_scores, "学习焦虑", None),
+        "对人焦虑": getattr(test_data.questionnaire_scores, "对人焦虑", None),
+        "孤独倾向": getattr(test_data.questionnaire_scores, "孤独倾向", None),
+        "自责倾向": getattr(test_data.questionnaire_scores, "自责倾向", None),
+    }
+
+    legacy_mapping = {
+        "焦虑": "学习焦虑",
+        "抑郁": "对人焦虑",
+        "压力": "孤独倾向",
+    }
+
+    for legacy_key, new_key in legacy_mapping.items():
+        legacy_value = getattr(test_data.questionnaire_scores, legacy_key, None)
+        if legacy_value is not None and score_items.get(new_key) is None:
+            score_items[new_key] = legacy_value
+
+    default_max_scores = {
+        "学习焦虑": 15,
+        "对人焦虑": 10,
+        "孤独倾向": 10,
+        "自责倾向": 10,
+        "焦虑": 30,
+        "抑郁": 30,
+        "压力": 30,
+    }
+
+    normalized_scores = {}
+    for module_name, item in score_items.items():
+        if item is None:
+            continue
+
+        if isinstance(item, (int, float)):
+            score_value = int(item)
+            max_score = default_max_scores.get(module_name)
+            level = None
+            feedback = ""
+        else:
+            score_value = getattr(item, "score", None)
+            if score_value is None:
+                continue
+            max_score = getattr(item, "max_score", None) or default_max_scores.get(module_name)
+            level = getattr(item, "level", None)
+            feedback = getattr(item, "feedback", "") or ""
+
+        normalized_scores[module_name] = {
+            "score": score_value,
+            "max_score": max_score,
+            "level": level,
+            "feedback": feedback,
         }
-        
-        # 根据模块调整阈值
-        threshold = base_thresholds.get(module_name, 15)
-        
-        # 超过阈值即为异常
-        return score > threshold
+
+    # 科学的异常判断逻辑
+    def is_score_abnormal(score_item, module_name):
+        """判断单个得分是否异常"""
+        if score_item is None:
+            return False
+
+        level = score_item.get("level")
+        if level in ["重度", "中度"]:
+            return True
+
+        score_value = score_item.get("score")
+        max_score = score_item.get("max_score") or default_max_scores.get(module_name)
+        if score_value is None or max_score in (None, 0):
+            return False
+
+        try:
+            return score_value / max_score >= 0.8
+        except ZeroDivisionError:
+            return False
     
     # 综合判断异常状态
     is_abnormal = False
     abnormal_modules = []
     
-    # 检查各模块得分
-    if is_score_abnormal(test_data.questionnaire_scores.焦虑, "焦虑"):
-        is_abnormal = True
-        abnormal_modules.append("焦虑")
-    if is_score_abnormal(test_data.questionnaire_scores.抑郁, "抑郁"):
-        is_abnormal = True  
-        abnormal_modules.append("抑郁")
-    if is_score_abnormal(test_data.questionnaire_scores.压力, "压力"):
-        is_abnormal = True
-        abnormal_modules.append("压力")
+    for module_name, item in normalized_scores.items():
+        if is_score_abnormal(item, module_name):
+            is_abnormal = True
+            abnormal_modules.append(module_name)
     
     # 如果有多个模块异常，在AI总结中特别标注
     if len(abnormal_modules) > 1:
@@ -218,13 +285,18 @@ def create_test_data(db: Session, test_data: schemas.TestDataUpload):
     db.add(db_test)
     db.flush()
 
-    # ✅ 手动添加每个字段
-    if test_data.questionnaire_scores.焦虑 is not None:
-        db.add(models.Score(test_fk_id=db_test.id, module_name="焦虑", score=test_data.questionnaire_scores.焦虑))
-    if test_data.questionnaire_scores.抑郁 is not None:
-        db.add(models.Score(test_fk_id=db_test.id, module_name="抑郁", score=test_data.questionnaire_scores.抑郁))
-    if test_data.questionnaire_scores.压力 is not None:
-        db.add(models.Score(test_fk_id=db_test.id, module_name="压力", score=test_data.questionnaire_scores.压力))
+    # ✅ 手动添加每个字段（兼容新旧结构）
+    for module_name, data in normalized_scores.items():
+        db.add(
+            models.Score(
+                test_fk_id=db_test.id,
+                module_name=module_name,
+                score=data["score"],
+                max_score=data["max_score"],
+                level=data["level"],
+                questionnaire_feedback=data["feedback"],
+            )
+        )
 
     if test_data.physiological_data_summary.心率 is not None:
         db.add(models.PhysiologicalData(test_fk_id=db_test.id, data_key="心率", data_value=test_data.physiological_data_summary.心率))
@@ -239,6 +311,9 @@ def create_test_data(db: Session, test_data: schemas.TestDataUpload):
 def get_test_records(
         db: Session,
         user_id: Optional[str] = None,
+        user_name: Optional[str] = None,
+        gender: Optional[str] = None,
+        class_name: Optional[str] = None,
         start_time: Optional[datetime] = None,
         end_time: Optional[datetime] = None,
         is_abnormal: Optional[bool] = None,
@@ -256,6 +331,12 @@ def get_test_records(
 
     if user_id:
         query = query.filter(models.Student.student_id == user_id)
+    if user_name:
+        query = query.filter(models.Student.name.contains(user_name))
+    if gender:
+        query = query.filter(models.Student.gender == gender)
+    if class_name:
+        query = query.filter(models.Student.class_name == class_name)
     if start_time:
         query = query.filter(models.Test.test_time >= start_time)
     if end_time:
@@ -466,79 +547,135 @@ def validate_student_for_client(db: Session, student_id: str):
 def create_client_test_data(db: Session, test_data: schemas.ClientTestDataUpload, pdf_file_path: str = None):
     """
     创建客户端上传的检测数据
+    优先使用数据库中已存在的学生基础信息，如果学生不存在则创建新学生
     """
     # 首先尝试通过学号查找学生
     student = db.query(models.Student).filter(models.Student.student_id == test_data.student_id).first()
     if not student:
-        # 如果学生不存在，创建新的学生记录
+        # 如果学生不存在，使用上传数据创建新学生
         student = models.Student(
             student_id=test_data.student_id,
-            name=test_data.name,
-            gender=test_data.gender,
-            class_name="未知班级"  # 默认班级，可以后续更新
+            name=test_data.name or "未知姓名",
+            gender=test_data.gender or "未知",
+            # age=test_data.age,  # 数据库 Student 模型没有 age 字段，先不要传
+            class_name=test_data.class_name or "未知班级"
         )
         db.add(student)
         db.flush()
+    else:
+        # 如果学生已存在，优先使用数据库中的基础信息
+        # 仅在数据库中的字段为空时，才用上传数据补充
+        if not student.name and test_data.name:
+            student.name = test_data.name
+        if not student.gender and test_data.gender:
+            student.gender = test_data.gender
+        # if (student.age is None or student.age == 0) and test_data.age:
+        #     student.age = test_data.age  # 数据库 Student 模型没有 age 字段，先不要更新
+        if not student.class_name and test_data.class_name:
+            student.class_name = test_data.class_name
+        db.flush()
 
-    # 科学的异常判断逻辑
-    def is_score_abnormal(score, module_name):
-        """判断单个得分是否异常"""
-        if score is None:
-            return False
-        
-        # 基础阈值
-        base_thresholds = {
-            "焦虑": 15,
-            "抑郁": 15, 
-            "压力": 15
+    if not test_data.ai_summary:
+        test_data.ai_summary = ""
+
+    # 兼容新旧结构的问卷得分
+    score_items = {
+        "学习焦虑": getattr(test_data.questionnaire_scores, "学习焦虑", None),
+        "对人焦虑": getattr(test_data.questionnaire_scores, "对人焦虑", None),
+        "孤独倾向": getattr(test_data.questionnaire_scores, "孤独倾向", None),
+        "自责倾向": getattr(test_data.questionnaire_scores, "自责倾向", None),
+    }
+    legacy_mapping = {
+        "焦虑": "学习焦虑",
+        "抑郁": "对人焦虑",
+        "压力": "孤独倾向",
+    }
+    for legacy_key, new_key in legacy_mapping.items():
+        legacy_value = getattr(test_data.questionnaire_scores, legacy_key, None)
+        if legacy_value is not None and score_items.get(new_key) is None:
+            score_items[new_key] = legacy_value
+
+    default_max_scores = {
+        "学习焦虑": 15,
+        "对人焦虑": 10,
+        "孤独倾向": 10,
+        "自责倾向": 10,
+        "焦虑": 30,
+        "抑郁": 30,
+        "压力": 30,
+    }
+    normalized_scores = {}
+    for module_name, item in score_items.items():
+        if item is None:
+            continue
+        if isinstance(item, (int, float)):
+            score_value = int(item)
+            max_score = default_max_scores.get(module_name)
+            level = None
+            feedback = ""
+        else:
+            score_value = getattr(item, "score", None)
+            if score_value is None:
+                continue
+            max_score = getattr(item, "max_score", None) or default_max_scores.get(module_name)
+            level = getattr(item, "level", None)
+            feedback = getattr(item, "feedback", "") or ""
+        normalized_scores[module_name] = {
+            "score": score_value,
+            "max_score": max_score,
+            "level": level,
+            "feedback": feedback,
         }
-        
-        # 根据模块调整阈值
-        threshold = base_thresholds.get(module_name, 15)
-        
-        # 超过阈值即为异常
-        return score > threshold
-    
-    # 综合判断异常状态
+
+    def is_score_abnormal(score_item, module_name):
+        if score_item is None:
+            return False
+        level = score_item.get("level")
+        if level in ["重度", "中度"]:
+            return True
+        score_value = score_item.get("score")
+        max_score = score_item.get("max_score") or default_max_scores.get(module_name)
+        if score_value is None or max_score in (None, 0):
+            return False
+        try:
+            return score_value / max_score >= 0.8
+        except ZeroDivisionError:
+            return False
+
     is_abnormal = False
     abnormal_modules = []
-    
-    # 检查各模块得分
-    if is_score_abnormal(test_data.questionnaire_scores.焦虑, "焦虑"):
-        is_abnormal = True
-        abnormal_modules.append("焦虑")
-    if is_score_abnormal(test_data.questionnaire_scores.抑郁, "抑郁"):
-        is_abnormal = True  
-        abnormal_modules.append("抑郁")
-    if is_score_abnormal(test_data.questionnaire_scores.压力, "压力"):
-        is_abnormal = True
-        abnormal_modules.append("压力")
-    
-    # 如果有多个模块异常，在AI总结中特别标注
+    for module_name, item in normalized_scores.items():
+        if is_score_abnormal(item, module_name):
+            is_abnormal = True
+            abnormal_modules.append(module_name)
+
     if len(abnormal_modules) > 1:
         test_data.ai_summary = f"检测出多维度异常（{', '.join(abnormal_modules)}），建议重点关注和进一步评估。{test_data.ai_summary}"
     elif len(abnormal_modules) == 1:
         test_data.ai_summary = f"检测出{abnormal_modules[0]}风险，建议进一步评估。{test_data.ai_summary}"
 
-    # 创建检测记录
     db_test = models.Test(
         student_fk_id=student.id,
         test_time=test_data.test_time,
         ai_summary=test_data.ai_summary,
         report_file_path=pdf_file_path or test_data.report_file_path,
         is_abnormal=is_abnormal,
-        status="completed"  # 客户端上传的数据默认为已完成状态
+        status="completed"
     )
     db.add(db_test)
     db.flush()
 
-    # 添加问卷得分
-    if test_data.questionnaire_scores.焦虑 is not None:
-        db.add(models.Score(test_fk_id=db_test.id, module_name="焦虑", score=test_data.questionnaire_scores.焦虑))
-    if test_data.questionnaire_scores.抑郁 is not None:
-        db.add(models.Score(test_fk_id=db_test.id, module_name="抑郁", score=test_data.questionnaire_scores.抑郁))
-    if test_data.questionnaire_scores.压力 is not None:
-        db.add(models.Score(test_fk_id=db_test.id, module_name="压力", score=test_data.questionnaire_scores.压力))
+    for module_name, data in normalized_scores.items():
+        db.add(
+            models.Score(
+                test_fk_id=db_test.id,
+                module_name=module_name,
+                score=data["score"],
+                max_score=data["max_score"],
+                level=data["level"],
+                questionnaire_feedback=data["feedback"],
+            )
+        )
 
     # 添加生理数据
     if test_data.physiological_data_summary.心率 is not None:
@@ -788,7 +925,8 @@ def export_dashboard_stats_to_excel(db: Session) -> str:
 # 新增函数：获取所有学号（用于批量导入去重）
 def get_all_student_ids(db: Session):
     """获取所有学生的学号，用于批量导入时的去重检查"""
-    return db.query(models.Student.student_id).all()
+    result = db.query(models.Student.student_id).all()
+    return [row[0] for row in result]
 
 
 # 新增函数：聚合查询仪表板统计

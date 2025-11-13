@@ -42,7 +42,7 @@ python3 migrate.py upgrade
 
 # 启动后端服务（后台运行）
 echo "启动后端服务..."
-nohup python3 -m uvicorn main:app --host 0.0.0.0 --port 8000 > app.log 2>&1 &
+nohup python3 -m uvicorn main:app --host 0.0.0.0 --port 8002 > app.log 2>&1 &
 echo $! > backend.pid
 echo "后端服务已启动，PID: $(cat backend.pid)"
 
@@ -88,7 +88,7 @@ fi
 cd ..
 
 echo "部署完成！"
-echo "后端服务: http://localhost:8000"
+echo "后端服务: http://localhost:8002"
 echo "前端服务: http://localhost:8080 (开发模式)"
 echo ""
 echo "管理命令:"

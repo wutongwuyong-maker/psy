@@ -152,6 +152,7 @@
 
 <script>
 import { ref, reactive, computed, onMounted } from "vue";
+import { ElMessage } from "element-plus";
 import service from "@/http";
 
 export default {
@@ -198,10 +199,22 @@ export default {
     const fetchStudents = async () => {
       loading.value = true;
       try {
-        const res = await service.get("/api/students");
+        const res = await service.get("/api/students", {
+          params: {
+            skip: 0,
+            limit: 10000, // 设置足够大的限制以获取所有学生
+          },
+        });
         students.value = res.data;
+        console.log(`成功获取 ${res.data.length} 条学生记录`);
       } catch (err) {
         console.error("获取学生信息失败:", err);
+        // 显示错误提示
+        ElMessage.error(
+          err.response?.data?.detail ||
+            err.message ||
+            "获取学生信息失败，请检查网络连接或刷新页面重试"
+        );
       } finally {
         loading.value = false;
       }
@@ -238,38 +251,96 @@ export default {
     const validateStudentId = async () => {
       if (!form.student_id) return;
       try {
-        await service.post("/api/students/validate", {
+        const response = await service.post("/api/students/validate", {
           student_id: form.student_id,
         });
-        if (formRef.value) {
-          formRef.value.setFieldError("student_id", "学号已存在");
-        }
-      } catch (err) {
-        if (err.response?.status === 404) {
+        // 检查响应数据，如果返回学生信息说明学号已存在
+        if (response.data) {
+          // 学号存在，显示错误
+          if (formRef.value) {
+            formRef.value.setFieldError(
+              "student_id",
+              "该学号已存在，请使用其他学号"
+            );
+          }
+        } else {
+          // 学号不存在，清除任何错误提示（这是正常的新增情况）
           if (formRef.value) {
             formRef.value.clearValidate("student_id");
           }
         }
+      } catch (err) {
+        // 处理其他错误情况
+        console.error("学号验证失败:", err);
       }
     };
 
     // 保存学生
     const saveStudent = async () => {
       if (!formRef.value) return;
-      await formRef.value.validate();
+
+      // 先验证表单
+      try {
+        await formRef.value.validate();
+      } catch (validationError) {
+        console.error("表单验证失败:", validationError);
+        return;
+      }
+
+      // 显示保存中的状态
+      console.log("开始保存学生信息:", form);
+
       try {
         if (selectedStudent.value) {
+          console.log("更新学生信息");
           await service.put(
             `/api/students/${selectedStudent.value.student_id}`,
             form
           );
         } else {
-          await service.post("/api/students", form);
+          console.log("创建新学生");
+          const response = await service.post("/api/students", form);
+          console.log("保存成功，响应:", response.data);
         }
+
+        console.log("保存成功，关闭对话框并刷新列表");
         dialogVisible.value = false;
         fetchStudents();
+
+        // 显示成功消息
+        alert("学生信息保存成功！");
       } catch (err) {
         console.error("保存学生信息失败:", err);
+        console.error("错误详情:", err.response?.data);
+        console.error("错误状态码:", err.response?.status);
+        console.error("错误消息:", err.message);
+
+        // 如果是学号已存在的错误，显示给用户
+        if (
+          err.response?.status === 400 &&
+          err.response?.data?.detail === "学号已存在"
+        ) {
+          if (formRef.value) {
+            formRef.value.setFieldError(
+              "student_id",
+              "该学号已存在，请使用其他学号"
+            );
+          }
+        } else {
+          // 显示其他错误信息
+          let errorMessage = "保存失败";
+          if (err.response?.data?.detail) {
+            errorMessage = `保存失败: ${err.response.data.detail}`;
+          } else if (err.message) {
+            errorMessage = `保存失败: ${err.message}`;
+          } else if (err.code === "ECONNABORTED") {
+            errorMessage = "请求超时，请检查网络连接";
+          } else if (!err.response) {
+            errorMessage = "网络连接失败，请检查后端服务是否启动";
+          }
+
+          alert(errorMessage);
+        }
       }
     };
 
@@ -425,8 +496,9 @@ export default {
       handleSortChange,
       handleSizeChange,
       handleCurrentChange,
-      formatDate: (row) =>
-        row.created_at ? new Date(row.created_at).toLocaleString() : "",
+      formatDate: (row) => {
+        return row.created_at ? new Date(row.created_at).toLocaleString() : "";
+      },
     };
   },
 };

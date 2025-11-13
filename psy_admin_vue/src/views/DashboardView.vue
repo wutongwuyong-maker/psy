@@ -55,7 +55,8 @@
 
     <!-- 图表区域 -->
     <div class="charts-grid">
-      <!-- 检测趋势图 -->
+      <!-- 检测趋势图 - 已注释 -->
+      <!--
       <el-card class="chart-card">
         <template #header>
           <div class="card-header">
@@ -73,6 +74,7 @@
         </template>
         <div ref="trendChart" class="chart-container"></div>
       </el-card>
+      -->
 
       <!-- 异常分布图 -->
       <el-card class="chart-card">
@@ -82,16 +84,6 @@
           </div>
         </template>
         <div ref="abnormalChart" class="chart-container"></div>
-      </el-card>
-
-      <!-- 问卷得分统计 -->
-      <el-card class="chart-card">
-        <template #header>
-          <div class="card-header">
-            <span>问卷平均得分统计</span>
-          </div>
-        </template>
-        <div ref="scoreChart" class="chart-container"></div>
       </el-card>
 
       <!-- 班级分布 -->

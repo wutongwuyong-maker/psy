@@ -6,7 +6,7 @@ import requests
 import json
 from datetime import datetime
 
-BASE_URL = "http://localhost:8000"
+BASE_URL = "http://localhost:8002"
 
 def test_validate_student():
     """测试学号验证接口"""
@@ -42,7 +42,7 @@ def test_upload_test_data():
     try:
         # 准备测试数据
         test_data = {
-            "user_id": "U001",
+            "student_id": "U001",
             "name": "张三",
             "gender": "男",
             "age": 20,
@@ -102,7 +102,7 @@ def test_get_test_status():
 
 if __name__ == "__main__":
     print("开始测试客户端对接接口...")
-    print("请确保后端服务器正在运行在 http://localhost:8000")
+    print("请确保后端服务器正在运行在 http://localhost:8002")
     print()
     
     test_validate_student()

@@ -434,22 +434,43 @@ export default {
           }
         );
 
-        alert(`成功生成 ${response.data.report_files.length} 份报告`);
-        this.clearSelection();
+        if (response && response.data) {
+          const reportCount = response.data.report_files?.length || 0;
+          alert(`成功生成 ${reportCount} 份报告`);
+          this.clearSelection();
 
-        // 可选：自动下载报告文件
-        if (response.data.report_files.length > 0) {
-          response.data.report_files.forEach((file) => {
-            // 创建下载链接
-            const link = document.createElement("a");
-            link.href = `/api/reports/${file.student_id}/download?format=pdf`;
-            link.download = file.file_name;
-            document.body.appendChild(link);
-            link.click();
-            document.body.removeChild(link);
-          });
+          // 可选：自动下载报告文件
+          const reportFiles = response.data.report_files;
+          if (Array.isArray(reportFiles) && reportFiles.length > 0) {
+            // 使用setTimeout避免Vue响应式系统问题
+            setTimeout(() => {
+              reportFiles.forEach((file, index) => {
+                // 验证文件对象属性
+                const studentId = file?.student_id;
+                const fileName = file?.file_name;
+
+                if (studentId && fileName) {
+                  // 延迟下载，避免浏览器阻止
+                  setTimeout(() => {
+                    const link = document.createElement("a");
+                    link.setAttribute(
+                      "href",
+                      `/api/reports/${studentId}/download?format=pdf`
+                    );
+                    link.setAttribute("download", fileName);
+                    document.body.appendChild(link);
+                    link.click();
+                    document.body.removeChild(link);
+                  }, index * 500); // 每个文件延迟500ms
+                } else {
+                  console.warn("无效的文件对象:", file);
+                }
+              });
+            }, 100);
+          }
         }
       } catch (error) {
+        console.error("批量生成报告失败:", error);
         alert(
           "批量生成报告失败：" + (error.response?.data?.detail || error.message)
         );

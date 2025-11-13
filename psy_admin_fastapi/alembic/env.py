@@ -32,7 +32,7 @@ target_metadata = Base.metadata
 
 def get_url():
     """从环境变量或配置文件获取数据库URL"""
-    return f"mysql+pymysql://root:wzyis1204@localhost:3306/psy_test_db?charset=utf8mb4"
+    return f"mysql+pymysql://root:123456@localhost:3306/psy_test_db?charset=utf8mb4"
 
 def run_migrations_offline() -> None:
     """Run migrations in 'offline' mode.

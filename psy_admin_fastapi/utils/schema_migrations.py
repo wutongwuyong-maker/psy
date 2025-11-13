@@ -41,3 +41,73 @@ def ensure_core_schema() -> None:
             # 兼容 MySQL 5/8 对 IF NOT EXISTS 的差异，忽略已存在错误
             pass
 
+        try:
+            # 兼容新增 scores.max_score 和 scores.level 列
+            has_max_score = conn.execute(
+                text(
+                    """
+                    SELECT COUNT(*)
+                    FROM INFORMATION_SCHEMA.COLUMNS
+                    WHERE TABLE_SCHEMA = DATABASE()
+                      AND TABLE_NAME = 'scores'
+                      AND COLUMN_NAME = 'max_score'
+                    """
+                )
+            ).scalar() or 0
+
+            if not has_max_score:
+                conn.execute(text("ALTER TABLE scores ADD COLUMN max_score INT NULL"))
+        except SQLAlchemyError:
+            pass
+
+        try:
+            has_level = conn.execute(
+                text(
+                    """
+                    SELECT COUNT(*)
+                    FROM INFORMATION_SCHEMA.COLUMNS
+                    WHERE TABLE_SCHEMA = DATABASE()
+                      AND TABLE_NAME = 'scores'
+                      AND COLUMN_NAME = 'level'
+                    """
+                )
+            ).scalar() or 0
+
+            if not has_level:
+                conn.execute(text("ALTER TABLE scores ADD COLUMN level VARCHAR(20) NULL"))
+        except SQLAlchemyError:
+            pass
+
+        try:
+            has_feedback = conn.execute(
+                text(
+                    """
+                    SELECT COUNT(*)
+                    FROM INFORMATION_SCHEMA.COLUMNS
+                    WHERE TABLE_SCHEMA = DATABASE()
+                      AND TABLE_NAME = 'scores'
+                      AND COLUMN_NAME = 'questionnaire_feedback'
+                    """
+                )
+            ).scalar() or 0
+
+            if not has_feedback:
+                conn.execute(
+                    text(
+                        "ALTER TABLE scores ADD COLUMN questionnaire_feedback VARCHAR(255) NULL DEFAULT ''"
+                    )
+                )
+            else:
+                conn.execute(
+                    text(
+                        "ALTER TABLE scores MODIFY COLUMN questionnaire_feedback VARCHAR(255) NULL DEFAULT ''"
+                    )
+                )
+        except SQLAlchemyError:
+            pass
+
+        try:
+            conn.commit()
+        except Exception:
+            pass
+

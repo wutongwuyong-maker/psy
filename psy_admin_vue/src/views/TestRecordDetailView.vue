@@ -38,32 +38,7 @@
             <label>用户ID：</label>
             <span>{{ record.student?.student_id }}</span>
           </div>
-          <div class="info-item">
-            <label>性别：</label>
-            <span>{{ record.student?.gender }}</span>
-          </div>
-          <div class="info-item">
-            <label>年龄：</label>
-            <span>{{ record.student?.age || "未知" }}</span>
-          </div>
-          <div class="info-item">
-            <label>AI评估总结：</label>
-            <span class="summary-text">{{ record.ai_summary || "无" }}</span>
-          </div>
         </div>
-      </el-card>
-
-      <!-- 问卷得分分析 -->
-      <el-card class="chart-card">
-        <template #header>
-          <div class="card-header">
-            <span>问卷得分分析</span>
-            <el-button type="text" @click="downloadScoreData"
-              >下载得分数据</el-button
-            >
-          </div>
-        </template>
-        <div ref="scoreChart" class="chart-container"></div>
       </el-card>
 
       <!-- 生理数据趋势 -->

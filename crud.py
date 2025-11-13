@@ -11,8 +11,8 @@ from psy_admin_fastapi.security import get_password_hash, verify_password
 import pandas as pd
 import os
 
-
 from psy_admin_fastapi.utils.cache import cached_query
+
 
 ###
 ###
@@ -51,13 +51,16 @@ def authenticate_admin_user(db: Session, username: str, password: str):
         return None
     return user
 
+
 def get_student(db: Session, student_id: str):
     """根据学号获取单个学生"""
     return db.query(models.Student).filter(models.Student.student_id == student_id).first()
 
+
 def validate_student_id(db: Session, student_id: str):
     """根据学号校验学生是否存在"""
     return db.query(models.Student).filter(models.Student.student_id == student_id).first()
+
 
 def create_student(db: Session, student: schemas.StudentCreate):
     """创建单个学生"""
@@ -67,49 +70,71 @@ def create_student(db: Session, student: schemas.StudentCreate):
     db.refresh(db_student)
     return db_student
 
+
 def batch_create_students(db: Session, students: List[schemas.ExcelImportSchema]):
     """批量创建学生"""
-    db_students = [models.Student(**s.dict()) for s in students]
+    # 为每个学生添加 created_at 字段
+    db_students = []
+    for student in students:
+        student_data = student.dict()
+        student_data['created_at'] = datetime.utcnow()  # 添加创建时间
+        db_students.append(models.Student(**student_data))
+
     db.bulk_save_objects(db_students)
     db.commit()
-    # 刷新获取完整数据
-    for s in db_students:
-        db.refresh(s)
     return db_students
+
 
 def update_student(db: Session, student_id: str, student_update: schemas.StudentUpdate):
     """更新学生信息"""
     db_student = get_student(db, student_id)
     if not db_student:
         return None
-    
+
     # 仅更新传入的字段
     update_data = student_update.dict(exclude_unset=True)
     for key, value in update_data.items():
         setattr(db_student, key, value)
-    
+
     db.commit()
     db.refresh(db_student)
     return db_student
 
+
 def delete_student(db: Session, student_id: str):
-    """删除学生"""
+    """删除学生及其相关数据"""
     db_student = get_student(db, student_id)
     if not db_student:
         return False
     
+    # 先删除相关的检测记录
+    from psy_admin_fastapi.models import Test, Score, PhysiologicalData
+    
+    # 获取该学生的所有检测记录
+    tests = db.query(Test).filter(Test.student_fk_id == db_student.id).all()
+    
+    for test in tests:
+        # 删除检测记录相关的得分数据
+        db.query(Score).filter(Score.test_fk_id == test.id).delete()
+        # 删除检测记录相关的生理数据
+        db.query(PhysiologicalData).filter(PhysiologicalData.test_fk_id == test.id).delete()
+        # 删除检测记录
+        db.delete(test)
+    
+    # 最后删除学生记录
     db.delete(db_student)
     db.commit()
     return True
 
+
 def get_students_with_filters(
-    db: Session,
-    skip: int = 0,
-    limit: int = 100,
-    class_name: Optional[str] = None,
-    gender: Optional[str] = None,
-    sort_by: str = "name",
-    sort_order: str = "asc"
+        db: Session,
+        skip: int = 0,
+        limit: int = 100,
+        class_name: Optional[str] = None,
+        gender: Optional[str] = None,
+        sort_by: str = "name",
+        sort_order: str = "asc"
 ):
     """带筛选和排序的学生列表查询"""
     query = db.query(models.Student)
@@ -124,7 +149,7 @@ def get_students_with_filters(
     sort_column = getattr(models.Student, sort_by, models.Student.name)
     if sort_order == "desc":
         sort_column = sort_column.desc()
-    
+
     query = query.order_by(sort_column)
     return query.offset(skip).limit(limit).all()
 
@@ -155,14 +180,14 @@ def log_login_attempt(db: Session, username: str, success: bool, message: Option
 
 def create_test_data(db: Session, test_data: schemas.TestDataUpload):
     # 首先尝试通过学号查找学生
-    student = db.query(models.Student).filter(models.Student.student_id == test_data.user_id).first()
+    student = db.query(models.Student).filter(models.Student.student_id == test_data.student_id).first()
     if not student:
         # 如果学生不存在，创建新的学生记录
         student = models.Student(
-            student_id=test_data.user_id,
+            student_id=test_data.student_id,
             name=test_data.name,
             gender=test_data.gender,
-            class_name="未知班级"  # 默认班级，可以后续更新
+            class_name=getattr(test_data, 'class_name', None) or "未知班级"  # 使用提供的班级或默认值
         )
         db.add(student)
         db.flush()
@@ -172,35 +197,35 @@ def create_test_data(db: Session, test_data: schemas.TestDataUpload):
         """判断单个得分是否异常"""
         if score is None:
             return False
-        
+
         # 基础阈值
         base_thresholds = {
             "焦虑": 15,
-            "抑郁": 15, 
+            "抑郁": 15,
             "压力": 15
         }
-        
+
         # 根据模块调整阈值
         threshold = base_thresholds.get(module_name, 15)
-        
+
         # 超过阈值即为异常
         return score > threshold
-    
+
     # 综合判断异常状态
     is_abnormal = False
     abnormal_modules = []
-    
+
     # 检查各模块得分
     if is_score_abnormal(test_data.questionnaire_scores.焦虑, "焦虑"):
         is_abnormal = True
         abnormal_modules.append("焦虑")
     if is_score_abnormal(test_data.questionnaire_scores.抑郁, "抑郁"):
-        is_abnormal = True  
+        is_abnormal = True
         abnormal_modules.append("抑郁")
     if is_score_abnormal(test_data.questionnaire_scores.压力, "压力"):
         is_abnormal = True
         abnormal_modules.append("压力")
-    
+
     # 如果有多个模块异常，在AI总结中特别标注
     if len(abnormal_modules) > 1:
         test_data.ai_summary = f"检测出多维度异常（{', '.join(abnormal_modules)}），建议重点关注和进一步评估。{test_data.ai_summary}"
@@ -227,18 +252,24 @@ def create_test_data(db: Session, test_data: schemas.TestDataUpload):
         db.add(models.Score(test_fk_id=db_test.id, module_name="压力", score=test_data.questionnaire_scores.压力))
 
     if test_data.physiological_data_summary.心率 is not None:
-        db.add(models.PhysiologicalData(test_fk_id=db_test.id, data_key="心率", data_value=test_data.physiological_data_summary.心率))
+        db.add(models.PhysiologicalData(test_fk_id=db_test.id, data_key="心率",
+                                        data_value=test_data.physiological_data_summary.心率))
     if test_data.physiological_data_summary.脑电alpha is not None:
-        db.add(models.PhysiologicalData(test_fk_id=db_test.id, data_key="脑电alpha", data_value=test_data.physiological_data_summary.脑电alpha))
+        db.add(models.PhysiologicalData(test_fk_id=db_test.id, data_key="脑电alpha",
+                                        data_value=test_data.physiological_data_summary.脑电alpha))
 
     db.commit()
     db.refresh(db_test)
     return db_test
 
+
 @cached_query(ttl=120)  # 缓存2分钟
 def get_test_records(
         db: Session,
         user_id: Optional[str] = None,
+        user_name: Optional[str] = None,
+        gender: Optional[str] = None,
+        class_name: Optional[str] = None,
         start_time: Optional[datetime] = None,
         end_time: Optional[datetime] = None,
         is_abnormal: Optional[bool] = None,
@@ -256,6 +287,12 @@ def get_test_records(
 
     if user_id:
         query = query.filter(models.Student.student_id == user_id)
+    if user_name:
+        query = query.filter(models.Student.name.contains(user_name))
+    if gender:
+        query = query.filter(models.Student.gender == gender)
+    if class_name:
+        query = query.filter(models.Student.class_name == class_name)
     if start_time:
         query = query.filter(models.Test.test_time >= start_time)
     if end_time:
@@ -329,6 +366,7 @@ def delete_test_record(db: Session, record_id: int):
         db.commit()
     return True
 
+
 # --- 状态管理相关 CRUD 函数 ---
 
 def get_test_record_status(db: Session, record_id: int):
@@ -346,6 +384,7 @@ def get_test_record_status(db: Session, record_id: int):
         "ai_summary": record.ai_summary
     }
 
+
 def update_test_record_status(db: Session, record_id: int, status_update: schemas.TestRecordStatusUpdate):
     """
     更新检测记录状态
@@ -353,27 +392,28 @@ def update_test_record_status(db: Session, record_id: int, status_update: schema
     record = db.query(models.Test).filter(models.Test.id == record_id).first()
     if not record:
         return None
-    
+
     # 更新状态
     record.status = status_update.status
     if status_update.ai_summary:
         record.ai_summary = status_update.ai_summary
-    
+
     db.commit()
     db.refresh(record)
     return record
+
 
 def get_test_records_batch_status(db: Session, student_ids: Optional[List[str]] = None):
     """
     批量获取检测记录状态
     """
     query = db.query(models.Test).join(models.Student)
-    
+
     if student_ids:
         query = query.filter(models.Student.student_id.in_(student_ids))
-    
+
     records = query.all()
-    
+
     # 统计状态
     status_counts = {
         "total_count": len(records),
@@ -383,7 +423,7 @@ def get_test_records_batch_status(db: Session, student_ids: Optional[List[str]] 
         "completed_count": sum(1 for r in records if r.status == "completed"),
         "failed_count": sum(1 for r in records if r.status == "failed")
     }
-    
+
     # 转换为响应格式
     record_statuses = []
     for record in records:
@@ -394,11 +434,12 @@ def get_test_records_batch_status(db: Session, student_ids: Optional[List[str]] 
             "status": record.status,
             "ai_summary": record.ai_summary
         })
-    
+
     return {
         "records": record_statuses,
         **status_counts
     }
+
 
 def get_student_test_records_status(db: Session, student_id: str):
     """
@@ -407,10 +448,10 @@ def get_student_test_records_status(db: Session, student_id: str):
     records = db.query(models.Test).join(models.Student).filter(
         models.Student.student_id == student_id
     ).all()
-    
+
     if not records:
         raise HTTPException(status_code=404, detail="学生未找到或没有检测记录")
-    
+
     # 统计状态
     status_counts = {
         "total_count": len(records),
@@ -420,7 +461,7 @@ def get_student_test_records_status(db: Session, student_id: str):
         "completed_count": sum(1 for r in records if r.status == "completed"),
         "failed_count": sum(1 for r in records if r.status == "failed")
     }
-    
+
     # 转换为响应格式
     record_statuses = []
     for record in records:
@@ -431,11 +472,12 @@ def get_student_test_records_status(db: Session, student_id: str):
             "status": record.status,
             "ai_summary": record.ai_summary
         })
-    
+
     return {
         "records": record_statuses,
         **status_counts
     }
+
 
 # === 客户端对接相关 CRUD 函数 ===
 
@@ -447,7 +489,7 @@ def validate_student_for_client(db: Session, student_id: str):
         student = db.query(models.Student).filter(models.Student.student_id == student_id).first()
         if not student:
             return {"exists": False, "student_info": None}
-        
+
         return {
             "exists": True,
             "student_info": {
@@ -463,19 +505,20 @@ def validate_student_for_client(db: Session, student_id: str):
         logging.error(f"学号验证失败: {e}")
         raise
 
+
 def create_client_test_data(db: Session, test_data: schemas.ClientTestDataUpload, pdf_file_path: str = None):
     """
     创建客户端上传的检测数据
     """
     # 首先尝试通过学号查找学生
-    student = db.query(models.Student).filter(models.Student.student_id == test_data.user_id).first()
+    student = db.query(models.Student).filter(models.Student.student_id == test_data.student_id).first()
     if not student:
         # 如果学生不存在，创建新的学生记录
         student = models.Student(
-            student_id=test_data.user_id,
+            student_id=test_data.student_id,
             name=test_data.name,
             gender=test_data.gender,
-            class_name="未知班级"  # 默认班级，可以后续更新
+            class_name=getattr(test_data, 'class_name', None) or "未知班级"  # 使用提供的班级或默认值
         )
         db.add(student)
         db.flush()
@@ -485,35 +528,35 @@ def create_client_test_data(db: Session, test_data: schemas.ClientTestDataUpload
         """判断单个得分是否异常"""
         if score is None:
             return False
-        
+
         # 基础阈值
         base_thresholds = {
             "焦虑": 15,
-            "抑郁": 15, 
+            "抑郁": 15,
             "压力": 15
         }
-        
+
         # 根据模块调整阈值
         threshold = base_thresholds.get(module_name, 15)
-        
+
         # 超过阈值即为异常
         return score > threshold
-    
+
     # 综合判断异常状态
     is_abnormal = False
     abnormal_modules = []
-    
+
     # 检查各模块得分
     if is_score_abnormal(test_data.questionnaire_scores.焦虑, "焦虑"):
         is_abnormal = True
         abnormal_modules.append("焦虑")
     if is_score_abnormal(test_data.questionnaire_scores.抑郁, "抑郁"):
-        is_abnormal = True  
+        is_abnormal = True
         abnormal_modules.append("抑郁")
     if is_score_abnormal(test_data.questionnaire_scores.压力, "压力"):
         is_abnormal = True
         abnormal_modules.append("压力")
-    
+
     # 如果有多个模块异常，在AI总结中特别标注
     if len(abnormal_modules) > 1:
         test_data.ai_summary = f"检测出多维度异常（{', '.join(abnormal_modules)}），建议重点关注和进一步评估。{test_data.ai_summary}"
@@ -542,13 +585,16 @@ def create_client_test_data(db: Session, test_data: schemas.ClientTestDataUpload
 
     # 添加生理数据
     if test_data.physiological_data_summary.心率 is not None:
-        db.add(models.PhysiologicalData(test_fk_id=db_test.id, data_key="心率", data_value=test_data.physiological_data_summary.心率))
+        db.add(models.PhysiologicalData(test_fk_id=db_test.id, data_key="心率",
+                                        data_value=test_data.physiological_data_summary.心率))
     if test_data.physiological_data_summary.脑电alpha is not None:
-        db.add(models.PhysiologicalData(test_fk_id=db_test.id, data_key="脑电alpha", data_value=test_data.physiological_data_summary.脑电alpha))
+        db.add(models.PhysiologicalData(test_fk_id=db_test.id, data_key="脑电alpha",
+                                        data_value=test_data.physiological_data_summary.脑电alpha))
 
     db.commit()
     db.refresh(db_test)
     return db_test
+
 
 def get_student_test_status_for_client(db: Session, student_id: str):
     """
@@ -575,7 +621,7 @@ def get_student_test_status_for_client(db: Session, student_id: str):
 
     # 获取最新的检测记录
     latest_record = records[0]
-    
+
     # 判断状态
     if latest_record.status == "completed":
         status = "completed"
@@ -598,10 +644,10 @@ def get_student_test_status_for_client(db: Session, student_id: str):
 def export_students_to_excel(db: Session, skip: int = 0, limit: int = 10000) -> str:
     """导出学生数据到Excel文件"""
     students = get_students_with_filters(db, skip=0, limit=limit)
-    
+
     if not students:
         raise ValueError("没有可导出的学生数据")
-    
+
     # 准备数据
     data = []
     for student in students:
@@ -612,39 +658,39 @@ def export_students_to_excel(db: Session, skip: int = 0, limit: int = 10000) -> 
             "性别": student.gender,
             "创建时间": student.created_at.strftime("%Y-%m-%d %H:%M:%S") if student.created_at else ""
         })
-    
+
     # 创建DataFrame并导出
     df = pd.DataFrame(data)
-    
+
     # 导出目录
     export_dir = "exports"
     os.makedirs(export_dir, exist_ok=True)
-    
+
     # 生成文件名
     filename = f"学生数据_{datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx"
     filepath = os.path.join(export_dir, filename)
-    
+
     # 保存Excel文件
     df.to_excel(filepath, index=False, engine="openpyxl")
-    
+
     return filepath
 
 
-def export_test_records_to_excel(db: Session, user_id: Optional[str] = None, 
-                               start_time: Optional[datetime] = None,
-                               end_time: Optional[datetime] = None,
-                               is_abnormal: Optional[bool] = None,
-                               status: Optional[str] = None) -> str:
+def export_test_records_to_excel(db: Session, user_id: Optional[str] = None,
+                                 start_time: Optional[datetime] = None,
+                                 end_time: Optional[datetime] = None,
+                                 is_abnormal: Optional[bool] = None,
+                                 status: Optional[str] = None) -> str:
     """导出检测记录数据到Excel文件"""
-    
+
     # 获取所有符合条件的记录
-    records = get_test_records(db, user_id=user_id, start_time=start_time, 
-                             end_time=end_time, is_abnormal=is_abnormal, 
-                             status=status, skip=0, limit=999999)
-    
+    records = get_test_records(db, user_id=user_id, start_time=start_time,
+                               end_time=end_time, is_abnormal=is_abnormal,
+                               status=status, skip=0, limit=999999)
+
     if not records:
         raise ValueError("没有可导出的检测记录数据")
-    
+
     # 准备数据
     data = []
     for record in records:
@@ -652,12 +698,12 @@ def export_test_records_to_excel(db: Session, user_id: Optional[str] = None,
         scores_dict = {}
         for score in record.scores:
             scores_dict[score.module_name] = score.score
-        
+
         # 获取生理数据
         phys_data_dict = {}
         for phys_data in record.physiological_data:
             phys_data_dict[phys_data.data_key] = phys_data.data_value
-        
+
         data.append({
             "记录ID": record.id,
             "学号": record.student.student_id,
@@ -672,59 +718,59 @@ def export_test_records_to_excel(db: Session, user_id: Optional[str] = None,
             **scores_dict,  # 展开问卷得分
             **phys_data_dict  # 展开生理数据
         })
-    
+
     # 创建DataFrame并导出
     df = pd.DataFrame(data)
-    
+
     # 导出目录
     export_dir = "exports"
     os.makedirs(export_dir, exist_ok=True)
-    
+
     # 生成文件名
     filename = f"检测记录数据_{datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx"
     filepath = os.path.join(export_dir, filename)
-    
+
     # 保存Excel文件
     df.to_excel(filepath, index=False, engine="openpyxl")
-    
+
     return filepath
 
 
 def export_dashboard_stats_to_excel(db: Session) -> str:
     """导出仪表板统计数据到Excel文件"""
-    
+
     # 获取统计数据
     total_students = len(get_students_with_filters(db, skip=0, limit=999999))
     all_records = get_test_records(db, skip=0, limit=999999)
     total_records = len(all_records)
     abnormal_records = [r for r in all_records if r.is_abnormal]
     abnormal_count = len(abnormal_records)
-    
+
     # 获取今日记录数
     today = datetime.now().date()
     today_start = datetime.combine(today, datetime.min.time())
     today_records = get_test_records(db, start_time=today_start, skip=0, limit=999999)
     today_count = len(today_records)
-    
+
     # 获取班级分布
     students = get_students_with_filters(db, skip=0, limit=999999)
     class_distribution = {}
     for student in students:
         class_name = student.class_name
         class_distribution[class_name] = class_distribution.get(class_name, 0) + 1
-    
+
     # 获取得分统计
     score_stats = {
         "焦虑": [],
         "抑郁": [],
         "压力": []
     }
-    
+
     for record in all_records:
         for score in record.scores:
             if score.module_name in score_stats:
                 score_stats[score.module_name].append(score.score)
-    
+
     # 计算每个分数段的分布
     score_distribution = {}
     for module_name, scores in score_stats.items():
@@ -735,7 +781,7 @@ def export_dashboard_stats_to_excel(db: Session) -> str:
             "21-25": 0,
             "26-30": 0
         }
-        
+
         for score in scores:
             if score <= 10:
                 distribution["0-10"] += 1
@@ -747,16 +793,16 @@ def export_dashboard_stats_to_excel(db: Session) -> str:
                 distribution["21-25"] += 1
             else:
                 distribution["26-30"] += 1
-        
+
         score_distribution[module_name] = distribution
-    
+
     # 创建多sheet的Excel文件
     export_dir = "exports"
     os.makedirs(export_dir, exist_ok=True)
-    
+
     filename = f"仪表板统计数据_{datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx"
     filepath = os.path.join(export_dir, filename)
-    
+
     with pd.ExcelWriter(filepath, engine='openpyxl') as writer:
         # 统计概览sheet
         stats_data = {
@@ -764,13 +810,13 @@ def export_dashboard_stats_to_excel(db: Session) -> str:
             "数值": [total_students, total_records, abnormal_count, today_count]
         }
         pd.DataFrame(stats_data).to_excel(writer, sheet_name='统计概览', index=False)
-        
+
         # 班级分布sheet
         class_data = []
         for class_name, count in class_distribution.items():
             class_data.append({"班级": class_name, "学生数": count})
         pd.DataFrame(class_data).to_excel(writer, sheet_name='班级分布', index=False)
-        
+
         # 得分分布sheet
         score_data = []
         for module_name, distribution in score_distribution.items():
@@ -781,14 +827,15 @@ def export_dashboard_stats_to_excel(db: Session) -> str:
                     "人数": count
                 })
         pd.DataFrame(score_data).to_excel(writer, sheet_name='得分分布', index=False)
-    
+
     return filepath
 
 
 # 新增函数：获取所有学号（用于批量导入去重）
 def get_all_student_ids(db: Session):
     """获取所有学生的学号，用于批量导入时的去重检查"""
-    return db.query(models.Student.student_id).all()
+    result = db.query(models.Student.student_id).all()
+    return [row[0] for row in result]
 
 
 # 新增函数：聚合查询仪表板统计
@@ -796,25 +843,25 @@ def get_dashboard_stats_aggregated(db: Session):
     """使用聚合查询获取仪表板统计数据"""
     from sqlalchemy import func, and_
     from datetime import datetime, date
-    
+
     # 学生总数
     total_students = db.query(func.count(models.Student.id)).scalar()
-    
+
     # 检测记录总数
     total_records = db.query(func.count(models.Test.id)).scalar()
-    
+
     # 异常记录数
     abnormal_count = db.query(func.count(models.Test.id)).filter(
         models.Test.is_abnormal == True
     ).scalar()
-    
+
     # 今日记录数
     today = date.today()
     today_start = datetime.combine(today, datetime.min.time())
     today_count = db.query(func.count(models.Test.id)).filter(
         models.Test.test_time >= today_start
     ).scalar()
-    
+
     return {
         "total_students": total_students or 0,
         "total_records": total_records or 0,

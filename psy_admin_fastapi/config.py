@@ -9,7 +9,7 @@ class Settings(BaseSettings):
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 30
 
     # 数据库配置
-    DATABASE_URL_NO_DB: str = "mysql+pymysql://root:wzyis1204@localhost:3306/"
+    DATABASE_URL_NO_DB: str = "mysql+pymysql://root:123456@localhost:3306/"
     DB_NAME: str = "psy_test_db"
 
     # 日志配置

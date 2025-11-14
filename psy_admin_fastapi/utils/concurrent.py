@@ -3,7 +3,7 @@ from concurrent.futures import ThreadPoolExecutor
 from queue import Queue
 from typing import Callable, Any
 from sqlalchemy.orm import Session
-from psy_admin_fastapi.database import SessionLocal  # 导入数据库会话工厂
+from database import SessionLocal  # 导入数据库会话工厂
 
 # 线程本地存储：用于保存每个线程的数据库会话
 thread_local = threading.local()

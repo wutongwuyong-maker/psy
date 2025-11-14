@@ -6,9 +6,9 @@ from sqlalchemy.orm import Session
 from jose import JWTError, jwt
 from pydantic import BaseModel
 
-from psy_admin_fastapi import crud, models
-from psy_admin_fastapi.database import get_db_session # 导入数据库会话
-from psy_admin_fastapi.config import settings # 导入你的配置
+import crud, models
+from database import get_db_session # 导入数据库会话
+from config import settings # 导入你的配置
 
 # OAuth2PasswordBearer 用于处理 OAuth2 的密码流认证
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/auth/token") # 与实际登录路由保持一致

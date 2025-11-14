@@ -31,10 +31,41 @@
 
       <button @click="fetchStudents" class="filter-btn primary">筛选</button>
       <button @click="resetFilters" class="filter-btn">重置</button>
+      <button @click="openImportModal" class="filter-btn primary">
+        导入Excel
+      </button>
       <button @click="openAddDialog" class="filter-btn primary">
         新增学生
       </button>
       <button @click="refreshStudents" class="filter-btn">刷新</button>
+    </div>
+
+    <!-- Excel导入模态框 -->
+    <div v-if="importModalVisible" class="modal">
+      <div class="modal-content">
+        <h3>导入学生信息</h3>
+        <input
+          type="file"
+          ref="fileInput"
+          class="file-input"
+          accept=".xlsx,.xls"
+          @change="handleFileSelect"
+        />
+        <button
+          @click="uploadExcel"
+          class="filter-btn primary mt-4"
+          :disabled="importLoading"
+        >
+          {{ importLoading ? "导入中..." : "开始导入" }}
+        </button>
+        <button
+          @click="closeImportModal"
+          class="filter-btn mt-2"
+          :disabled="importLoading"
+        >
+          取消
+        </button>
+      </div>
     </div>
 
     <!-- 数据表格 -->
@@ -105,6 +136,16 @@
         >
         </el-pagination>
       </div>
+      <div v-if="!loading && filteredStudents.length === 0" class="empty-state">
+        <div class="empty-icon">
+          <img src="@/assets/img/empty.svg" alt="暂无数据" />
+        </div>
+        <h3>暂无学生数据</h3>
+        <p>点击"导入Excel"按钮开始导入学生数据</p>
+        <button @click="openImportModal" class="filter-btn primary">
+          导入Excel
+        </button>
+      </div>
     </div>
 
     <!-- 新增/编辑对话框 -->
@@ -152,6 +193,7 @@
 
 <script>
 import { ref, reactive, computed, onMounted } from "vue";
+import { ElMessage } from "element-plus";
 import service from "@/http";
 
 export default {
@@ -165,6 +207,10 @@ export default {
     const formRef = ref(null);
     const selectedStudent = ref(null);
     const loading = ref(false);
+    const importModalVisible = ref(false);
+    const importLoading = ref(false);
+    const selectedFile = ref(null);
+    const fileInput = ref(null);
 
     // 表单数据
     const form = reactive({
@@ -198,10 +244,22 @@ export default {
     const fetchStudents = async () => {
       loading.value = true;
       try {
-        const res = await service.get("/api/students");
+        const res = await service.get("/api/students", {
+          params: {
+            skip: 0,
+            limit: 10000, // 设置足够大的限制以获取所有学生
+          },
+        });
         students.value = res.data;
+        console.log(`成功获取 ${res.data.length} 条学生记录`);
       } catch (err) {
         console.error("获取学生信息失败:", err);
+        // 显示错误提示
+        ElMessage.error(
+          err.response?.data?.detail ||
+            err.message ||
+            "获取学生信息失败，请检查网络连接或刷新页面重试"
+        );
       } finally {
         loading.value = false;
       }
@@ -210,6 +268,70 @@ export default {
     // 刷新学生列表
     const refreshStudents = () => {
       fetchStudents();
+    };
+
+    const resetImportState = () => {
+      selectedFile.value = null;
+      if (fileInput.value) {
+        fileInput.value.value = "";
+      }
+    };
+
+    const closeImportModal = () => {
+      importModalVisible.value = false;
+      importLoading.value = false;
+      resetImportState();
+    };
+
+    const openImportModal = () => {
+      resetImportState();
+      importModalVisible.value = true;
+    };
+
+    const handleFileSelect = (event) => {
+      const file = event.target.files?.[0];
+      if (!file) {
+        selectedFile.value = null;
+        return;
+      }
+      const fileName = file.name?.toLowerCase() || "";
+      if (!fileName.endsWith(".xlsx") && !fileName.endsWith(".xls")) {
+        ElMessage.error("仅支持上传.xlsx或.xls格式文件");
+        event.target.value = "";
+        selectedFile.value = null;
+        return;
+      }
+      selectedFile.value = file;
+    };
+
+    const uploadExcel = async () => {
+      if (!selectedFile.value) {
+        ElMessage.warning("请选择Excel文件");
+        return;
+      }
+      importLoading.value = true;
+      const formData = new FormData();
+      formData.append("file", selectedFile.value);
+      try {
+        const response = await service.post(
+          "/api/students/batch-import",
+          formData,
+          {
+            headers: {
+              "Content-Type": "multipart/form-data",
+            },
+          }
+        );
+        ElMessage.success(response.data?.detail || "导入成功");
+        closeImportModal();
+        fetchStudents();
+      } catch (err) {
+        const message =
+          err.response?.data?.detail || err.message || "导入失败，请稍后重试";
+        ElMessage.error(message);
+      } finally {
+        importLoading.value = false;
+      }
     };
 
     // 打开新增对话框
@@ -238,38 +360,96 @@ export default {
     const validateStudentId = async () => {
       if (!form.student_id) return;
       try {
-        await service.post("/api/students/validate", {
+        const response = await service.post("/api/students/validate", {
           student_id: form.student_id,
         });
-        if (formRef.value) {
-          formRef.value.setFieldError("student_id", "学号已存在");
-        }
-      } catch (err) {
-        if (err.response?.status === 404) {
+        // 检查响应数据，如果返回学生信息说明学号已存在
+        if (response.data) {
+          // 学号存在，显示错误
+          if (formRef.value) {
+            formRef.value.setFieldError(
+              "student_id",
+              "该学号已存在，请使用其他学号"
+            );
+          }
+        } else {
+          // 学号不存在，清除任何错误提示（这是正常的新增情况）
           if (formRef.value) {
             formRef.value.clearValidate("student_id");
           }
         }
+      } catch (err) {
+        // 处理其他错误情况
+        console.error("学号验证失败:", err);
       }
     };
 
     // 保存学生
     const saveStudent = async () => {
       if (!formRef.value) return;
-      await formRef.value.validate();
+
+      // 先验证表单
+      try {
+        await formRef.value.validate();
+      } catch (validationError) {
+        console.error("表单验证失败:", validationError);
+        return;
+      }
+
+      // 显示保存中的状态
+      console.log("开始保存学生信息:", form);
+
       try {
         if (selectedStudent.value) {
+          console.log("更新学生信息");
           await service.put(
             `/api/students/${selectedStudent.value.student_id}`,
             form
           );
         } else {
-          await service.post("/api/students", form);
+          console.log("创建新学生");
+          const response = await service.post("/api/students", form);
+          console.log("保存成功，响应:", response.data);
         }
+
+        console.log("保存成功，关闭对话框并刷新列表");
         dialogVisible.value = false;
         fetchStudents();
+
+        // 显示成功消息
+        alert("学生信息保存成功！");
       } catch (err) {
         console.error("保存学生信息失败:", err);
+        console.error("错误详情:", err.response?.data);
+        console.error("错误状态码:", err.response?.status);
+        console.error("错误消息:", err.message);
+
+        // 如果是学号已存在的错误，显示给用户
+        if (
+          err.response?.status === 400 &&
+          err.response?.data?.detail === "学号已存在"
+        ) {
+          if (formRef.value) {
+            formRef.value.setFieldError(
+              "student_id",
+              "该学号已存在，请使用其他学号"
+            );
+          }
+        } else {
+          // 显示其他错误信息
+          let errorMessage = "保存失败";
+          if (err.response?.data?.detail) {
+            errorMessage = `保存失败: ${err.response.data.detail}`;
+          } else if (err.message) {
+            errorMessage = `保存失败: ${err.message}`;
+          } else if (err.code === "ECONNABORTED") {
+            errorMessage = "请求超时，请检查网络连接";
+          } else if (!err.response) {
+            errorMessage = "网络连接失败，请检查后端服务是否启动";
+          }
+
+          alert(errorMessage);
+        }
       }
     };
 
@@ -396,6 +576,10 @@ export default {
       rules,
       selectedStudent,
       loading,
+      importModalVisible,
+      importLoading,
+      selectedFile,
+      fileInput,
 
       // 筛选条件
       filterName,
@@ -425,8 +609,13 @@ export default {
       handleSortChange,
       handleSizeChange,
       handleCurrentChange,
-      formatDate: (row) =>
-        row.created_at ? new Date(row.created_at).toLocaleString() : "",
+      openImportModal,
+      closeImportModal,
+      handleFileSelect,
+      uploadExcel,
+      formatDate: (row) => {
+        return row.created_at ? new Date(row.created_at).toLocaleString() : "";
+      },
     };
   },
 };
@@ -509,6 +698,64 @@ export default {
 
 .dialog-footer {
   text-align: right;
+}
+
+.modal {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+}
+
+.modal-content {
+  background: #fff;
+  padding: 24px;
+  border-radius: 8px;
+  max-width: 480px;
+  width: 90%;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+  text-align: center;
+}
+
+.modal-content h3 {
+  margin: 0 0 16px 0;
+  font-size: 18px;
+  font-weight: 600;
+}
+
+.file-input {
+  width: 100%;
+  padding: 8px;
+  border: 1px solid #dcdfe6;
+  border-radius: 4px;
+  background: #f9fafc;
+  margin-bottom: 16px;
+}
+
+.empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  margin-top: 24px;
+  padding: 40px 20px;
+  background: #f8f9fa;
+  border-radius: 8px;
+  text-align: center;
+  color: #606266;
+}
+
+.empty-icon {
+  width: 80px;
+  height: 80px;
+  opacity: 0.6;
 }
 
 /* 响应式设计 */

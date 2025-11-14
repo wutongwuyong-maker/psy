@@ -242,10 +242,11 @@ class ClientPhysiologicalData(BaseModel):
 
 class ClientTestDataUpload(BaseModel):
     """客户端检测数据上传"""
-    user_id: str
+    student_id: str
     name: str
     gender: str
     age: int
+    class_name: Optional[str] = None  # 添加班级字段
     test_time: datetime
     questionnaire_scores: ClientQuestionnaireScores
     physiological_data_summary: ClientPhysiologicalData

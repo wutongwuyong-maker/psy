@@ -1,4 +1,4 @@
-from psy_admin_fastapi.database import engine
+from database import engine
 from sqlalchemy import text
 
 def fix_tests_table():

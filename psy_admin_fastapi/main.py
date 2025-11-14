@@ -10,16 +10,16 @@ from jose import jwt, JWTError
 from sqlalchemy.orm import Session
 import pandas as pd
 from typing import List
-from psy_admin_fastapi import crud, models, schemas
-from psy_admin_fastapi.database import engine, get_db_session, Base  # 导入数据库相关
-from psy_admin_fastapi.config import settings  # 导入你的配置
-from psy_admin_fastapi.dependencies import get_current_admin_user, oauth2_scheme  # 导入认证依赖和OAuth2 scheme
+import crud, models, schemas
+from database import engine, get_db_session, Base  # 导入数据库相关
+from config import settings  # 导入你的配置
+from dependencies import get_current_admin_user, oauth2_scheme  # 导入认证依赖和OAuth2 scheme
 # 延迟导入报告服务，避免循环导入
-# from psy_admin_fastapi.services.report_service import generate_report_content, generate_pdf_report, generate_excel_report
+# from services.report_service import generate_report_content, generate_pdf_report, generate_excel_report
 from fastapi.responses import FileResponse
 import os
-from psy_admin_fastapi.utils.concurrent import thread_pool, thread_safe_db
-from psy_admin_fastapi.utils.schema_migrations import ensure_core_schema
+from utils.concurrent import thread_pool, thread_safe_db
+from utils.schema_migrations import ensure_core_schema
 
 # 配置日志
 logging.basicConfig(level=logging.INFO)
@@ -183,6 +183,9 @@ def _process_upload_data(test_data: schemas.TestDataUpload, db: Session):
 @app.get("/test-data/records/", response_model=List[schemas.TestRecordDetail], summary="获取所有心理检测记录列表")
 async def get_test_data_records(
     user_id: Optional[str] = None,
+    user_name: Optional[str] = None,
+    gender: Optional[str] = None,
+    class_name: Optional[str] = None,
     start_time: Optional[datetime] = None,
     end_time: Optional[datetime] = None,
     is_abnormal: Optional[bool] = None,
@@ -193,7 +196,7 @@ async def get_test_data_records(
     current_user: models.AdminUser = Depends(get_current_admin_user)  # 需要认证
 ):
     records = crud.get_test_records(
-        db, user_id, start_time, end_time, is_abnormal, status, skip, limit
+        db, user_id, user_name, gender, class_name, start_time, end_time, is_abnormal, status, skip, limit
     )
     return records
 
@@ -244,11 +247,9 @@ async def batch_import_students(
     valid_students = []
     duplicate_students = []
     error_rows = []
-    existing_student_ids = set()
     
     # 批量查询现有学号
-    existing_students = crud.get_all_student_ids(db)
-    existing_student_ids = {s.student_id for s in existing_students}
+    existing_student_ids = set(crud.get_all_student_ids(db))
     
     for index, row in df.iterrows():
         try:
@@ -288,10 +289,18 @@ async def batch_import_students(
 
     # 4. 批量插入有效数据
     success_count = 0
+    test_record_count = 0
     if valid_students:
         try:
-            crud.batch_create_students(db, valid_students)
+            # 批量创建学生
+            db_students = crud.batch_create_students(db, valid_students)
             success_count = len(valid_students)
+            
+            # 为每个新创建的学生创建待处理的检测记录
+            student_ids = [student.id for student in db_students]
+            if student_ids:
+                crud.batch_create_test_records(db, student_ids)
+                test_record_count = len(student_ids)
         except Exception as e:
             db.rollback()
             raise HTTPException(status_code=500, detail=f"批量插入失败: {str(e)}")
@@ -299,18 +308,19 @@ async def batch_import_students(
     # 5. 返回详细结果
     return {
         "success_count": success_count,
+        "test_record_count": test_record_count,
         "duplicate_count": len(duplicate_students),
         "error_count": len(error_rows),
         "duplicate_students": duplicate_students,
         "error_rows": error_rows,
-        "message": f"导入完成：成功 {success_count} 条，重复 {len(duplicate_students)} 条，错误 {len(error_rows)} 条"
+        "detail": f"导入完成：成功 {success_count} 条学生，创建 {test_record_count} 条待处理检测记录，重复 {len(duplicate_students)} 条，错误 {len(error_rows)} 条"
     }
 
 # 获取学生列表（支持筛选、排序、分页）
 @app.get("/api/students", response_model=List[schemas.Student])
 async def get_students(
     skip: int = 0,
-    limit: int = 100,
+    limit: int = 10000,  # 增加默认limit，支持获取更多数据
     class_name: Optional[str] = None,
     gender: Optional[str] = None,
     sort_by: str = "name",
@@ -318,10 +328,44 @@ async def get_students(
     db: Session = Depends(get_db_session),
     current_user: models.AdminUser = Depends(get_current_admin_user)
 ):
-    return crud.get_students_with_filters(
+    # 限制最大limit，防止查询过大数据集
+    if limit > 10000:
+        limit = 10000
+    
+    students = crud.get_students_with_filters(
         db, skip=skip, limit=limit, class_name=class_name,
         gender=gender, sort_by=sort_by, sort_order=sort_order
     )
+    
+    logger.info(f"获取学生列表: skip={skip}, limit={limit}, 返回{len(students)}条记录")
+    return students
+
+# 创建新学生
+@app.post("/api/students", response_model=schemas.Student)
+async def create_student(
+    student: schemas.StudentCreate,
+    db: Session = Depends(get_db_session),
+    current_user: models.AdminUser = Depends(get_current_admin_user)
+):
+    """创建新的学生记录"""
+    # 检查学号是否已存在
+    existing_student = crud.validate_student_id(db, student.student_id)
+    if existing_student:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"学号 {student.student_id} 已存在"
+        )
+    
+    # 创建学生
+    try:
+        new_student = crud.create_student(db, student)
+        return new_student
+    except Exception as e:
+        logger.error(f"创建学生失败: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"创建学生失败: {str(e)}"
+        )
 
 # 获取单个学生
 @app.get("/api/students/{student_id}", response_model=schemas.Student)
@@ -366,7 +410,7 @@ async def validate_student(
     db: Session = Depends(get_db_session)
 ):
     # 使用缓存提高性能
-    from psy_admin_fastapi.utils.cache import get_cached_student, cache_student
+    from utils.cache import get_cached_student, cache_student
     
     # 先尝试从缓存获取
     cached_student = get_cached_student(request.student_id)
@@ -376,7 +420,8 @@ async def validate_student(
     # 缓存未命中，查询数据库
     student = crud.validate_student_id(db, request.student_id)
     if not student:
-        raise HTTPException(status_code=404, detail="学号不存在")
+        # 学号不存在时返回None，不抛出错误（这是正常的新增情况）
+        return None
     
     # 缓存结果（120秒）
     cache_student(request.student_id, student, ttl=120)
@@ -398,7 +443,7 @@ async def get_student_info(
 @app.get("/api/reports/{student_id}")
 async def get_report(student_id: str, db: Session = Depends(get_db_session)):
     try:
-        from psy_admin_fastapi.services.report_service import generate_report_content
+        from services.report_service import generate_report_content
         content = generate_report_content(db, student_id)
         return {"content": content}
     except ValueError as e:
@@ -411,7 +456,7 @@ async def download_report(
     db: Session = Depends(get_db_session)
 ):
     try:
-        from psy_admin_fastapi.services.report_service import generate_report_content, generate_pdf_report, generate_excel_report
+        from services.report_service import generate_report_content, generate_pdf_report, generate_excel_report
         # 生成报告内容
         content = generate_report_content(db, student_id)
         
@@ -451,7 +496,7 @@ async def get_dashboard_stats(
     """获取仪表板所需的统计数据"""
     try:
         # 使用缓存提高性能
-        from psy_admin_fastapi.utils.cache import get_cached_stats, cache_stats
+        from utils.cache import get_cached_stats, cache_stats
         
         # 先尝试从缓存获取
         cached_stats = get_cached_stats("dashboard_stats")
@@ -771,7 +816,7 @@ async def batch_generate_reports(
             records.append(record)
         
         # 生成报告文件列表
-        from psy_admin_fastapi.services.report_service import generate_report_content, generate_pdf_report, generate_excel_report
+        from services.report_service import generate_report_content, generate_pdf_report, generate_excel_report
         report_files = []
         for record in records:
             try:
@@ -780,7 +825,7 @@ async def batch_generate_reports(
                 
                 # 根据格式生成对应文件
                 if format == "pdf":
-                    filepath = generate_pdf_report(content, record.student.student_id, record.student.name)
+                    filepath = generate_pdf_report(content, record.student.student_id)
                 elif format == "excel":
                     filepath = generate_excel_report(db, record.student.student_id)
                 
@@ -842,8 +887,12 @@ async def upload_test_data_from_client(
         os.makedirs(pdf_dir, exist_ok=True)
         
         # 生成PDF文件名（格式：姓名_学号.pdf）
-        safe_name = "".join(c for c in test_data_obj.name if c.isalnum() or c in (" ", "-", "_"))
-        pdf_filename = f"{safe_name}_{test_data_obj.student_id}.pdf"
+        # 如果name为None，使用student_id作为文件名
+        if test_data_obj.name:
+            safe_name = "".join(c for c in test_data_obj.name if c.isalnum() or c in (" ", "-", "_"))
+            pdf_filename = f"{safe_name}_{test_data_obj.student_id}.pdf"
+        else:
+            pdf_filename = f"{test_data_obj.student_id}.pdf"
         pdf_filepath = os.path.join(pdf_dir, pdf_filename)
         
         # 检查文件大小限制
@@ -895,4 +944,4 @@ async def get_student_test_status(
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=8000)
+    uvicorn.run(app, host="0.0.0.0", port=8002)

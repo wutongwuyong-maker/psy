@@ -7,7 +7,7 @@ from reportlab.pdfbase import pdfmetrics
 from reportlab.pdfbase.ttfonts import TTFont
 import pandas as pd
 
-from psy_admin_fastapi.models import Student, Test, Score, PhysiologicalData
+from models import Student, Test, Score, PhysiologicalData
 
 # 报告存储目录配置
 REPORT_DIR = "reports"
@@ -75,10 +75,11 @@ def generate_report_content(db: Session, student_id: str) -> str:
 
     return "\n".join(content)
 
-def generate_pdf_report(content: str, student_id: str, student_name: str = "Student") -> str:
+def generate_pdf_report(content: str, student_id: str) -> str:
     """生成PDF格式报告文件"""
     # 注意：避免在此函数内创建新的数据库会话。
     # 文件命名按学号生成，若需要姓名请在调用方查询并传入后再调整此处逻辑。
+    student_name = "Student"
     
     # 使用 {姓名}_{学号}.pdf 格式
     safe_name = "".join(c for c in student_name if c.isalnum() or c in (" ", "-", "_"))

@@ -1,4 +1,4 @@
-from psy_admin_fastapi.database import engine
+from database import engine
 from sqlalchemy import text
 
 def check_invalid_student_fk_ids():

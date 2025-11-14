@@ -32,7 +32,7 @@ TEST_CONFIG = {
         "echo": False
     },
     "api": {
-        "base_url": "http://localhost:8000",
+        "base_url": "http://localhost:8002",
         "timeout": 30,
         "max_retries": 3
     },

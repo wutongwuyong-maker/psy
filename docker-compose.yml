@@ -1,4 +1,4 @@
-version: '3.8'
+version: "3.8"
 
 services:
   # MySQL数据库
@@ -6,7 +6,7 @@ services:
     image: mysql:8.0
     container_name: psy_mysql
     environment:
-      MYSQL_ROOT_PASSWORD: wzyis1204
+      MYSQL_ROOT_PASSWORD: 123456
       MYSQL_DATABASE: psy_test_db
       MYSQL_CHARACTER_SET_SERVER: utf8mb4
       MYSQL_COLLATION_SERVER: utf8mb4_unicode_ci
@@ -25,11 +25,11 @@ services:
       dockerfile: Dockerfile
     container_name: psy_backend
     environment:
-      - DATABASE_URL_NO_DB=mysql+pymysql://root:wzyis1204@mysql:3306/
+      - DATABASE_URL_NO_DB=mysql+pymysql://root:123456@mysql:3306/
       - DB_NAME=psy_test_db
       - SECRET_KEY=your-secret-key-here-must-be-long-and-random
     ports:
-      - "8000:8000"
+      - "8002:8002"
     volumes:
       - ./psy_admin_fastapi:/app
       - ./reports:/app/reports
@@ -39,7 +39,7 @@ services:
     command: >
       sh -c "
         python3 migrate.py upgrade &&
-        python3 -m uvicorn main:app --host 0.0.0.0 --port 8000
+        python3 -m uvicorn main:app --host 0.0.0.0 --port 8002
       "
 
   # 前端服务
@@ -49,7 +49,7 @@ services:
       dockerfile: Dockerfile
     container_name: psy_frontend
     environment:
-      - VUE_APP_API_BASE=http://localhost:8000
+      - VUE_APP_API_BASE=http://localhost:8002
     ports:
       - "8080:80"
     depends_on:
@@ -73,4 +73,3 @@ services:
 
 volumes:
   mysql_data:
-

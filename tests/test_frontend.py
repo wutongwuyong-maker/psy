@@ -53,7 +53,7 @@ def test_student_management_api_call(page: Page, vue_server):
     
     # Verify request details
     assert request.method == "GET", "Should send GET request to students API"
-    assert request.url == "http://localhost:8000/api/students", "Should call correct API endpoint"
+    assert request.url == "http://localhost:8002/api/students", "Should call correct API endpoint"
     
     # Verify response data (using network response)
     with page.expect_response("**/api/students") as response_info:

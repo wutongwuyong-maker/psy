@@ -4,19 +4,23 @@ from passlib.context import CryptContext
 from datetime import datetime, timedelta, timezone
 from jose import jwt, JWTError
 from typing import Optional
+import hashlib
 
-from psy_admin_fastapi.config import settings # 导入你的配置
+from config import settings # 导入你的配置
 
-# 用于密码哈希的上下文
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+# 强制使用简单的哈希方法，避免bcrypt问题
+bcrypt_available = False
+print("Using simple SHA-256 hash for passwords")
 
 def verify_password(plain_password: str, hashed_password: str) -> bool:
     """验证明文密码是否与哈希密码匹配"""
-    return pwd_context.verify(plain_password, hashed_password)
+    # 简单的哈希验证
+    return hashlib.sha256(plain_password.encode()).hexdigest() == hashed_password
 
 def get_password_hash(password: str) -> str:
     """生成密码的哈希值"""
-    return pwd_context.hash(password)
+    # 简单的哈希
+    return hashlib.sha256(password.encode()).hexdigest()
 
 # 注意：create_access_token 函数通常放在 main.py 中，因为 JWT 的生成更靠近认证逻辑。
 # 但如果你希望把它完全封装到 security.py 中，也可以。

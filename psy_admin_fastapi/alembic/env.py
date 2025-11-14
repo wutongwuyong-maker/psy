@@ -9,8 +9,8 @@ import sys
 sys.path.append(os.path.dirname(os.path.dirname(__file__)))
 
 # 导入模型和配置
-from psy_admin_fastapi.models import Base
-from psy_admin_fastapi.config import settings
+from models import Base
+from config import settings
 
 # this is the Alembic Config object, which provides
 # access to the values within the .ini file in use.
@@ -32,7 +32,7 @@ target_metadata = Base.metadata
 
 def get_url():
     """从环境变量或配置文件获取数据库URL"""
-    return f"mysql+pymysql://root:wzyis1204@localhost:3306/psy_test_db?charset=utf8mb4"
+    return f"mysql+pymysql://root:123456@localhost:3306/psy_test_db?charset=utf8mb4"
 
 def run_migrations_offline() -> None:
     """Run migrations in 'offline' mode.

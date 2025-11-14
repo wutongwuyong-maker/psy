@@ -17,7 +17,7 @@ if __name__ == "__main__":
     
     print("正在启动心理检测管理系统...")
     print(f"项目根目录: {project_root}")
-    print("服务器将在 http://localhost:8000 启动")
+    print("服务器将在 http://localhost:8002 启动")
     print("按 Ctrl+C 停止服务器")
     
-    uvicorn.run(app, host="0.0.0.0", port=8000)
+    uvicorn.run(app, host="0.0.0.0", port=8002)

@@ -10,7 +10,7 @@ from sqlalchemy_utils import database_exists, create_database # 新增导入
 
 class Settings(BaseSettings):
     # 使用异步数据库驱动（asyncmy）替换同步驱动（pymysql）
-    DATABASE_URL_NO_DB: str = "mysql+asyncmy://root:wzyis1204@localhost:3306/" # <<<<<< 异步驱动
+    DATABASE_URL_NO_DB: str = "mysql+asyncmy://root:123456@localhost:3306/" # <<<<<< 异步驱动
     DB_NAME: str = "psy_test_db"
 
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
@@ -24,7 +24,7 @@ SQLALCHEMY_DATABASE_URL_NO_DB = settings.DATABASE_URL_NO_DB
 SQLALCHEMY_DATABASE_URL_FULL = settings.DATABASE_URL_NO_DB + settings.DB_NAME + "?charset=utf8mb4"
 
 # 同步数据库连接字符串（使用 pymysql 驱动）
-SQLALCHEMY_DATABASE_URL_SYNC = "mysql+pymysql://root:wzyis1204@localhost:3306/psy_test_db?charset=utf8mb4"
+SQLALCHEMY_DATABASE_URL_SYNC = "mysql+pymysql://root:123456@localhost:3306/psy_test_db?charset=utf8mb4"
 
 # 创建数据库引擎
 # 初始引擎，用于连接到MySQL服务器，但不指定特定数据库

@@ -17,7 +17,10 @@ body {
 }
 /* 全局微动效 */
 * {
-  transition: background-color 0.25s, color 0.25s, border-color 0.25s;
+  transition:
+    background-color 0.25s,
+    color 0.25s,
+    border-color 0.25s;
 }
 button,
 .el-button {

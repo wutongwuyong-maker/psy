@@ -65,7 +65,8 @@ export default {
         if (valid) {
           this.loading = true;
           try {
-            const API_BASE_URL = "http://localhost:8000";
+            const API_BASE_URL =
+              process.env.VUE_APP_API_BASE || "http://localhost:8000";
             const tokenUrl = `${API_BASE_URL}/token`;
 
             const params = new URLSearchParams();

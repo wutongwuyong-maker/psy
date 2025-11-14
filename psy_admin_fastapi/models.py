@@ -5,7 +5,7 @@ from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func # 用于获取当前时间
 from datetime import datetime
 
-from psy_admin_fastapi.database import Base # 从 .database 导入 Base
+from database import Base # 从 .database 导入 Base
 
 # 定义检测记录模型 (tests 表)
 class Test(Base):
@@ -29,8 +29,11 @@ class Score(Base):
     __tablename__ = 'scores'
     id = Column(Integer, primary_key=True, index=True)
     test_fk_id = Column(Integer, ForeignKey('tests.id'), nullable=False, comment='关联的检测记录ID')
-    module_name = Column(String(50), nullable=False, comment='问卷模块名，如焦虑、抑郁、压力')
+    module_name = Column(String(50), nullable=False, comment='问卷模块名，如学习焦虑、对人焦虑、孤独倾向、自责倾向')
     score = Column(Integer, nullable=False, comment='得分')
+    max_score = Column(Integer, nullable=True, comment='满分')
+    level = Column(String(20), nullable=True, comment='等级：重度、中度、轻度')
+    questionnaire_feedback = Column(String(255), nullable=True, comment='问卷反馈或备注信息')
 
     # 定义与 Test 的多对一关系
     test = relationship("Test", back_populates="scores")

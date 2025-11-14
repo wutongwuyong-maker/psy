@@ -15,10 +15,20 @@ class AdminUserCreate(BaseModel):
 
 
 # 检测系统上传数据模型
+class QuestionnaireScoreItem(BaseModel):
+    """单个问卷模块的得分项"""
+    score: int
+    max_score: int
+    level: str  # 重度、中度、轻度
+    feedback: Optional[str] = None
+
+
 class QuestionnaireScoresBase(BaseModel):
-    焦虑: Optional[int] = None
-    抑郁: Optional[int] = None
-    压力: Optional[int] = None
+    """问卷得分结构"""
+    学习焦虑: Optional[QuestionnaireScoreItem] = None
+    对人焦虑: Optional[QuestionnaireScoreItem] = None
+    孤独倾向: Optional[QuestionnaireScoreItem] = None
+    自责倾向: Optional[QuestionnaireScoreItem] = None
 
 
 class PhysiologicalDataBase(BaseModel):
@@ -73,6 +83,9 @@ class ScoreBase(BaseModel):
     id: int
     module_name: str
     score: int
+    max_score: Optional[int] = None
+    level: Optional[str] = None
+    questionnaire_feedback: Optional[str] = None
 
     class Config:
         from_attributes = True
@@ -120,6 +133,9 @@ class TokenData(BaseModel):
 class ScoreDetail(BaseModel):
     module_name: str
     score: int
+    max_score: Optional[int] = None
+    level: Optional[str] = None
+    questionnaire_feedback: Optional[str] = None
 
     class Config:
         from_attributes = True # 以前是 orm_mode = True
@@ -231,9 +247,10 @@ class StudentValidateResponse(BaseModel):
 
 class ClientQuestionnaireScores(BaseModel):
     """客户端问卷得分"""
-    焦虑: Optional[int] = None
-    抑郁: Optional[int] = None
-    压力: Optional[int] = None
+    学习焦虑: Optional[QuestionnaireScoreItem] = None
+    对人焦虑: Optional[QuestionnaireScoreItem] = None
+    孤独倾向: Optional[QuestionnaireScoreItem] = None
+    自责倾向: Optional[QuestionnaireScoreItem] = None
 
 class ClientPhysiologicalData(BaseModel):
     """客户端生理数据"""
@@ -243,13 +260,14 @@ class ClientPhysiologicalData(BaseModel):
 class ClientTestDataUpload(BaseModel):
     """客户端检测数据上传"""
     student_id: str
-    name: str
-    gender: str
-    age: int
+    name: Optional[str] = None
+    gender: Optional[str] = None
+    age: Optional[int] = None
+    class_name: Optional[str] = None  # 添加班级字段
     test_time: datetime
     questionnaire_scores: ClientQuestionnaireScores
     physiological_data_summary: ClientPhysiologicalData
-    ai_summary: str
+    ai_summary: Optional[str] = None
     report_file_path: str
 
 class TestStatusResponse(BaseModel):

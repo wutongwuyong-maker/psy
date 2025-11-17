@@ -143,6 +143,34 @@ def delete_student(db: Session, student_id: str):
     db.commit()
     return True
 
+def delete_students(db: Session, student_ids: List[str]) -> int:
+    """批量删除学生及其关联数据"""
+    if not student_ids:
+        return 0
+
+    from models import Test, Score, PhysiologicalData
+
+    students = db.query(models.Student).filter(models.Student.student_id.in_(student_ids)).all()
+    if not students:
+        return 0
+
+    student_db_ids = [student.id for student in students]
+
+    tests = db.query(Test).filter(Test.student_fk_id.in_(student_db_ids)).all()
+    if tests:
+        test_ids = [test.id for test in tests]
+        if test_ids:
+            db.query(Score).filter(Score.test_fk_id.in_(test_ids)).delete(synchronize_session=False)
+            db.query(PhysiologicalData).filter(PhysiologicalData.test_fk_id.in_(test_ids)).delete(synchronize_session=False)
+        for test in tests:
+            db.delete(test)
+
+    for student in students:
+        db.delete(student)
+
+    db.commit()
+    return len(students)
+
 def get_students_with_filters(
     db: Session,
     skip: int = 0,

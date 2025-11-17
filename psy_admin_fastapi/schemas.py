@@ -206,6 +206,10 @@ class Student(StudentBase):
 class StudentIDRequest(BaseModel):
     student_id: str
 
+class BatchDeleteStudentsRequest(BaseModel):
+    """批量删除学生请求"""
+    student_ids: List[str]
+
 # --- 状态管理相关 schemas ---
 class StudentBatchQuery(BaseModel):
     """批量学生查询请求"""

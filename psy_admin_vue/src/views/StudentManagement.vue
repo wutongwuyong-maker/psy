@@ -38,6 +38,18 @@
         新增学生
       </button>
       <button @click="refreshStudents" class="filter-btn">刷新</button>
+      <button
+        @click="batchDeleteStudents"
+        class="filter-btn danger"
+        :disabled="selectedStudents.length === 0 || batchDeleting"
+      >
+        {{ batchDeleting ? "删除中..." : "批量删除" }}
+      </button>
+    </div>
+
+    <div v-if="selectedStudents.length > 0" class="batch-info">
+      已选择 {{ selectedStudents.length }} 名学生
+      <button @click="clearSelection" class="filter-btn small">清空选择</button>
     </div>
 
     <!-- Excel导入模态框 -->
@@ -71,12 +83,15 @@
     <!-- 数据表格 -->
     <div class="table-container">
       <el-table
+        ref="tableRef"
         :data="paginatedStudents"
         border
         stripe
         v-loading="loading"
         @sort-change="handleSortChange"
+        @selection-change="handleSelectionChange"
       >
+        <el-table-column type="selection" width="50" align="center" />
         <el-table-column
           prop="name"
           label="姓名"
@@ -205,12 +220,15 @@ export default {
     const deleteDialogVisible = ref(false);
     const dialogTitle = ref("新增学生");
     const formRef = ref(null);
+    const tableRef = ref(null);
     const selectedStudent = ref(null);
+    const selectedStudents = ref([]);
     const loading = ref(false);
     const importModalVisible = ref(false);
     const importLoading = ref(false);
     const selectedFile = ref(null);
     const fileInput = ref(null);
+    const batchDeleting = ref(false);
 
     // 表单数据
     const form = reactive({
@@ -459,6 +477,42 @@ export default {
       deleteDialogVisible.value = true;
     };
 
+    const handleSelectionChange = (selection) => {
+      selectedStudents.value = selection.map((item) => item.student_id);
+    };
+
+    const clearSelection = () => {
+      selectedStudents.value = [];
+      if (tableRef.value) {
+        tableRef.value.clearSelection();
+      }
+    };
+
+    const batchDeleteStudents = async () => {
+      if (selectedStudents.value.length === 0 || batchDeleting.value) return;
+
+      const confirmed = window.confirm(
+        `确定删除选中的 ${selectedStudents.value.length} 名学生及其关联数据吗？此操作不可恢复。`
+      );
+      if (!confirmed) return;
+
+      batchDeleting.value = true;
+      try {
+        await service.delete("/api/students/batch", {
+          data: { student_ids: selectedStudents.value },
+        });
+        ElMessage.success("批量删除成功");
+        clearSelection();
+        fetchStudents();
+      } catch (err) {
+        const message =
+          err.response?.data?.detail || err.message || "批量删除失败";
+        ElMessage.error(message);
+      } finally {
+        batchDeleting.value = false;
+      }
+    };
+
     // 确认删除
     const confirmDelete = async () => {
       try {
@@ -599,12 +653,18 @@ export default {
 
       // 方法
       refreshStudents,
+      tableRef,
       openAddDialog,
       openEditDialog,
       validateStudentId,
       saveStudent,
       deleteStudent,
       confirmDelete,
+      batchDeleteStudents,
+      handleSelectionChange,
+      selectedStudents,
+      clearSelection,
+      batchDeleting,
       resetFilters,
       handleSortChange,
       handleSizeChange,
@@ -676,6 +736,30 @@ export default {
   background: #409eff;
   color: #fff;
   border-color: #409eff;
+}
+
+.filter-btn.danger {
+  background: #f56c6c;
+  color: #fff;
+  border-color: #f56c6c;
+}
+
+.filter-btn.small {
+  padding: 4px 12px;
+  font-size: 12px;
+}
+
+.batch-info {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: 12px 0;
+  padding: 12px 16px;
+  background: #fff3f3;
+  border: 1px solid #f56c6c;
+  border-radius: 6px;
+  color: #c45656;
+  font-size: 14px;
 }
 
 .filter-btn.primary:hover {

@@ -128,6 +128,28 @@
 
 **描述**: 删除学生记录
 
+### 批量删除学生
+
+**端点**: `DELETE /api/students/batch`
+
+**描述**: 根据学号列表删除多名学生及其关联数据
+
+**请求体**:
+
+```json
+{
+  "student_ids": ["U001", "U002", "U003"]
+}
+```
+
+**响应**:
+
+```json
+{
+  "deleted_count": 3
+}
+```
+
 ### 批量导入学生
 
 **端点**: `POST /api/students/batch-import`

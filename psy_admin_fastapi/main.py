@@ -390,6 +390,24 @@ async def update_student(
         raise HTTPException(status_code=404, detail="学生未找到")
     return updated_student
 
+@app.delete("/api/students/batch")
+async def batch_delete_students(
+    request: schemas.BatchDeleteStudentsRequest,
+    db: Session = Depends(get_db_session),
+    current_user: models.AdminUser = Depends(get_current_admin_user)
+):
+    if not request.student_ids:
+        raise HTTPException(status_code=400, detail="请提供要删除的学生学号列表")
+
+    try:
+        deleted_count = crud.delete_students(db, request.student_ids)
+        return {"deleted_count": deleted_count}
+    except HTTPException as e:
+        raise e
+    except Exception as e:
+        logger.error(f"批量删除学生失败: {e}")
+        raise HTTPException(status_code=500, detail=f"批量删除学生失败: {str(e)}")
+
 # 删除学生
 @app.delete("/api/students/{student_id}")
 async def delete_student(

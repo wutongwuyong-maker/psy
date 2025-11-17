@@ -63,39 +63,45 @@
         </template>
         <el-tabs v-model="activeTab" @tab-click="handleTabChange">
           <el-tab-pane label="问卷得分" name="scores">
-            <el-table :data="record.scores" border stripe>
-              <el-table-column
-                prop="module_name"
-                label="模块名称"
-                align="center"
-              ></el-table-column>
-              <el-table-column prop="score" label="得分" align="center">
-                <template #default="scope">
-                  <span
-                    :class="{
-                      'high-score': scope.row.score > 20,
-                      'warning-score': scope.row.score > 15,
-                    }"
-                  >
-                    {{ scope.row.score }}
-                  </span>
-                </template>
-              </el-table-column>
-            </el-table>
+            <div v-if="activeTab === 'scores'">
+              <!-- 问卷得分分布图已隐藏 -->
+              <!-- <div ref="scoreChart" class="chart"></div> -->
+              <el-table :data="record.scores" border stripe>
+                <el-table-column
+                  prop="module_name"
+                  label="模块名称"
+                  align="center"
+                ></el-table-column>
+                <el-table-column prop="score" label="得分" align="center">
+                  <template #default="scope">
+                    <span
+                      :class="{
+                        'high-score': scope.row.score > 20,
+                        'warning-score': scope.row.score > 15,
+                      }"
+                    >
+                      {{ scope.row.score }}
+                    </span>
+                  </template>
+                </el-table-column>
+              </el-table>
+            </div>
           </el-tab-pane>
           <el-tab-pane label="生理数据" name="physiological">
-            <el-table :data="record.physiological_data" border stripe>
-              <el-table-column
-                prop="data_key"
-                label="数据项"
-                align="center"
-              ></el-table-column>
-              <el-table-column
-                prop="data_value"
-                label="数值"
-                align="center"
-              ></el-table-column>
-            </el-table>
+            <div v-if="activeTab === 'physiological'">
+              <el-table :data="record.physiological_data" border stripe>
+                <el-table-column
+                  prop="data_key"
+                  label="数据项"
+                  align="center"
+                ></el-table-column>
+                <el-table-column
+                  prop="data_value"
+                  label="数值"
+                  align="center"
+                ></el-table-column>
+              </el-table>
+            </div>
           </el-tab-pane>
         </el-tabs>
       </el-card>
@@ -123,6 +129,8 @@ export default {
     const scoreChartInstance = ref(null);
     const physChartInstance = ref(null);
     const activeTab = ref("scores");
+    const _raf = ref(null);
+    const _last = ref({});
 
     const fetchRecordDetail = async () => {
       try {
@@ -154,8 +162,26 @@ export default {
       return dateString ? new Date(dateString).toLocaleString() : "";
     };
 
+    // 安全的 resize 方法：尺寸变更判断
+    const safeResize = (inst, el, key) => {
+      if (!inst || !el) return;
+      const w = el.clientWidth;
+      const h = el.clientHeight;
+      if (w <= 0 || h <= 0) return; // 不对不可见容器resize
+      const last = _last.value[key] || { w: 0, h: 0 };
+      if (last.w === w && last.h === h) return; // 尺寸未变就不resize
+      _last.value[key] = { w, h };
+      inst.resize({ width: w, height: h, animation: false });
+    };
+
     const initScoreChart = () => {
-      if (!scoreChart.value) return;
+      // 只初始化"当前"tab的图表；隐藏tab不处理
+      if (!scoreChart.value || activeTab.value !== "scores") return;
+
+      // 如果已经初始化过，先销毁
+      if (scoreChartInstance.value) {
+        scoreChartInstance.value.dispose();
+      }
 
       scoreChartInstance.value = echarts.init(scoreChart.value);
 
@@ -198,10 +224,16 @@ export default {
       };
 
       scoreChartInstance.value.setOption(option);
+      safeResize(scoreChartInstance.value, scoreChart.value, "score");
     };
 
     const initPhysChart = () => {
       if (!physChart.value) return;
+
+      // 如果已经初始化过，先销毁
+      if (physChartInstance.value) {
+        physChartInstance.value.dispose();
+      }
 
       physChartInstance.value = echarts.init(physChart.value);
 
@@ -244,6 +276,7 @@ export default {
       };
 
       physChartInstance.value.setOption(option);
+      safeResize(physChartInstance.value, physChart.value, "phys");
     };
 
     const downloadScoreData = () => {
@@ -280,43 +313,61 @@ export default {
       ElMessage.success("生理数据已下载");
     };
 
-    const handleResize = () => {
-      if (scoreChartInstance.value) {
-        scoreChartInstance.value.resize();
-      }
-      if (physChartInstance.value) {
-        physChartInstance.value.resize();
-      }
+    // 窗口 resize 处理：使用 rAF 防抖
+    const onWindowResize = () => {
+      if (_raf.value) return;
+      _raf.value = requestAnimationFrame(() => {
+        _raf.value = null;
+        // 对两个可见图分别调用
+        if (scoreChartInstance.value && scoreChart.value) {
+          safeResize(scoreChartInstance.value, scoreChart.value, "score");
+        }
+        if (physChartInstance.value && physChart.value) {
+          safeResize(physChartInstance.value, physChart.value, "phys");
+        }
+      });
     };
 
-    const handleTabChange = (tab) => {
+    // 初始化当前激活的图表
+    const initActiveChart = () => {
+      if (activeTab.value === "scores") {
+        initScoreChart();
+      }
+      // physChart 始终可见，所以也初始化
+      initPhysChart();
+    };
+
+    const handleTabChange = () => {
+      // Tab 切换时，使用 nextTick 确保 DOM 更新后再初始化
       setTimeout(() => {
-        if (tab.props.name === "scores" && scoreChart.value) {
-          initScoreChart();
-        } else if (tab.props.name === "physiological" && physChart.value) {
-          initPhysChart();
-        }
+        initActiveChart();
       }, 100);
     };
 
     onMounted(() => {
       fetchRecordDetail().then(() => {
-        // 数据加载完成后初始化图表
+        // 数据加载完成后，使用 nextTick 确保 DOM 渲染完成
         setTimeout(() => {
-          initScoreChart();
-          initPhysChart();
+          initActiveChart();
         }, 100);
       });
-      window.addEventListener("resize", handleResize);
+      window.addEventListener("resize", onWindowResize, { passive: true });
     });
 
     onUnmounted(() => {
-      window.removeEventListener("resize", handleResize);
+      window.removeEventListener("resize", onWindowResize);
+      if (_raf.value) {
+        cancelAnimationFrame(_raf.value);
+        _raf.value = null;
+      }
+      // 销毁所有图表
       if (scoreChartInstance.value) {
         scoreChartInstance.value.dispose();
+        scoreChartInstance.value = null;
       }
       if (physChartInstance.value) {
         physChartInstance.value.dispose();
+        physChartInstance.value = null;
       }
     });
 
@@ -443,6 +494,14 @@ export default {
 .chart-container {
   width: 100%;
   height: 400px;
+}
+
+.chart {
+  width: 100%;
+  height: 360px;
+  min-height: 300px;
+  overflow: hidden;
+  margin-bottom: 16px;
 }
 
 .high-score {

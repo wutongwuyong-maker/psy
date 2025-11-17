@@ -297,6 +297,18 @@ def create_test_data(db: Session, test_data: schemas.TestDataUpload):
     elif len(abnormal_modules) == 1:
         test_data.ai_summary = f"检测出{abnormal_modules[0]}风险，建议进一步评估。{test_data.ai_summary}"
 
+    # 如果学生已有检测记录，删除所有旧记录（确保每个学生只保留最新的一条记录）
+    existing_tests = db.query(models.Test).filter(models.Test.student_fk_id == student.id).all()
+    if existing_tests:
+        for old_test in existing_tests:
+            # 删除关联的问卷得分
+            db.query(models.Score).filter(models.Score.test_fk_id == old_test.id).delete()
+            # 删除关联的生理数据
+            db.query(models.PhysiologicalData).filter(models.PhysiologicalData.test_fk_id == old_test.id).delete()
+            # 删除检测记录
+            db.delete(old_test)
+        db.flush()  # 先提交删除操作
+
     db_test = models.Test(
         student_fk_id=student.id,
         test_time=test_data.test_time,
@@ -346,20 +358,33 @@ def get_test_records(
 ) -> List[models.Test]:
     """
     获取检测记录列表，使用 joinedload 预加载关联数据，避免 N+1 查询。
+    确保每个学生只返回一条最新的检测记录。
     """
+    # 先构建基础查询条件
+    base_query = db.query(models.Student)
+    
+    if user_id:
+        base_query = base_query.filter(models.Student.student_id == user_id)
+    if user_name:
+        base_query = base_query.filter(models.Student.name.contains(user_name))
+    if gender:
+        base_query = base_query.filter(models.Student.gender == gender)
+    if class_name:
+        base_query = base_query.filter(models.Student.class_name == class_name)
+    
+    # 获取符合条件的学生ID列表
+    student_ids = [s.id for s in base_query.all()]
+    if not student_ids:
+        return []
+    
+    # 构建主查询，查询所有符合条件的检测记录
     query = db.query(models.Test).join(models.Student) \
         .options(joinedload(models.Test.student)) \
         .options(joinedload(models.Test.scores)) \
-        .options(joinedload(models.Test.physiological_data))
-
-    if user_id:
-        query = query.filter(models.Student.student_id == user_id)
-    if user_name:
-        query = query.filter(models.Student.name.contains(user_name))
-    if gender:
-        query = query.filter(models.Student.gender == gender)
-    if class_name:
-        query = query.filter(models.Student.class_name == class_name)
+        .options(joinedload(models.Test.physiological_data)) \
+        .filter(models.Student.id.in_(student_ids))
+    
+    # 先应用时间、异常状态、状态等过滤条件
     if start_time:
         query = query.filter(models.Test.test_time >= start_time)
     if end_time:
@@ -368,10 +393,27 @@ def get_test_records(
         query = query.filter(models.Test.is_abnormal == is_abnormal)
     if status is not None:
         query = query.filter(models.Test.status == status)
-
-    query = query.order_by(models.Test.test_time.desc())
-
-    return query.offset(skip).limit(limit).all()
+    
+    # 获取所有符合条件的记录，然后按学生分组，只保留最新的
+    all_tests = query.all()
+    
+    # 按学生ID分组，每个学生只保留最新的记录
+    student_latest_test = {}
+    for test in all_tests:
+        student_id = test.student_fk_id
+        if student_id not in student_latest_test:
+            student_latest_test[student_id] = test
+        else:
+            # 比较test_time，保留更新的
+            if test.test_time > student_latest_test[student_id].test_time:
+                student_latest_test[student_id] = test
+    
+    # 转换为列表并按test_time降序排序
+    filtered_tests = list(student_latest_test.values())
+    filtered_tests.sort(key=lambda x: x.test_time, reverse=True)
+    
+    # 应用分页
+    return filtered_tests[skip:skip + limit]
 
 
 def get_test_record_detail(db: Session, record_id: int) -> Optional[models.Test]:
@@ -676,6 +718,18 @@ def create_client_test_data(db: Session, test_data: schemas.ClientTestDataUpload
         test_data.ai_summary = f"检测出多维度异常（{', '.join(abnormal_modules)}），建议重点关注和进一步评估。{test_data.ai_summary}"
     elif len(abnormal_modules) == 1:
         test_data.ai_summary = f"检测出{abnormal_modules[0]}风险，建议进一步评估。{test_data.ai_summary}"
+
+    # 如果学生已有检测记录，删除所有旧记录（确保每个学生只保留最新的一条记录）
+    existing_tests = db.query(models.Test).filter(models.Test.student_fk_id == student.id).all()
+    if existing_tests:
+        for old_test in existing_tests:
+            # 删除关联的问卷得分
+            db.query(models.Score).filter(models.Score.test_fk_id == old_test.id).delete()
+            # 删除关联的生理数据
+            db.query(models.PhysiologicalData).filter(models.PhysiologicalData.test_fk_id == old_test.id).delete()
+            # 删除检测记录
+            db.delete(old_test)
+        db.flush()  # 先提交删除操作
 
     db_test = models.Test(
         student_fk_id=student.id,

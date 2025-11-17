@@ -40,6 +40,18 @@ def generate_report_content(db: Session, student_id: str) -> str:
     if not tests:
         return "该学生暂无检测记录"
 
+    # 过滤掉没有实际检测数据的空记录（既没有问卷得分也没有生理数据）
+    valid_tests = []
+    for test in tests:
+        scores = db.query(Score).filter(Score.test_fk_id == test.id).all()
+        phys_data = db.query(PhysiologicalData).filter(PhysiologicalData.test_fk_id == test.id).all()
+        # 只保留有问卷得分或生理数据的记录
+        if scores or phys_data:
+            valid_tests.append(test)
+    
+    if not valid_tests:
+        return "该学生暂无检测记录"
+
     # 构建报告内容框架
     content = [
         "=== 学生检测报告 ===",
@@ -51,7 +63,7 @@ def generate_report_content(db: Session, student_id: str) -> str:
     ]
 
     # 添加每条检测记录的详细信息
-    for idx, test in enumerate(tests, 1):
+    for idx, test in enumerate(valid_tests, 1):
         content.extend([
             f"--- 检测记录 {idx} ---",
             f"检测时间: {test.test_time.strftime('%Y-%m-%d %H:%M:%S')}",
@@ -75,11 +87,10 @@ def generate_report_content(db: Session, student_id: str) -> str:
 
     return "\n".join(content)
 
-def generate_pdf_report(content: str, student_id: str) -> str:
+def generate_pdf_report(content: str, student_id: str, student_name: str = "Student") -> str:
     """生成PDF格式报告文件"""
     # 注意：避免在此函数内创建新的数据库会话。
     # 文件命名按学号生成，若需要姓名请在调用方查询并传入后再调整此处逻辑。
-    student_name = "Student"
     
     # 使用 {姓名}_{学号}.pdf 格式
     safe_name = "".join(c for c in student_name if c.isalnum() or c in (" ", "-", "_"))
@@ -115,9 +126,21 @@ def generate_excel_report(db: Session, student_id: str) -> str:
     if not tests:
         raise ValueError("No test records")
 
+    # 过滤掉没有实际检测数据的空记录（既没有问卷得分也没有生理数据）
+    valid_tests = []
+    for test in tests:
+        scores = db.query(Score).filter(Score.test_fk_id == test.id).all()
+        phys_data = db.query(PhysiologicalData).filter(PhysiologicalData.test_fk_id == test.id).all()
+        # 只保留有问卷得分或生理数据的记录
+        if scores or phys_data:
+            valid_tests.append(test)
+    
+    if not valid_tests:
+        raise ValueError("No test records with actual data")
+
     # 整理数据为DataFrame
     data = []
-    for test in tests:
+    for test in valid_tests:
         # 基础信息行
         base_info = {
             "学生姓名": student.name,

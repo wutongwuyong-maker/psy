@@ -3,8 +3,9 @@
     <h2 class="page-title">检测报告预览</h2>
     <el-card class="report-card">
       <div class="loading" v-if="loading">
-        <span class="dot"></span><span class="dot"></span
-        ><span class="dot"></span>
+        <span class="dot"></span>
+        <span class="dot"></span>
+        <span class="dot"></span>
       </div>
       <div class="error" v-else-if="errorMsg">{{ errorMsg }}</div>
       <pre class="report-content" v-else>{{ reportContent }}</pre>
@@ -25,7 +26,7 @@ import { useRoute } from "vue-router";
 import service from "@/http";
 
 const route = useRoute();
-const studentId = route.params.student_id;
+const studentId = route.params.student_id || route.params.id || "";
 
 const reportContent = ref("");
 const loading = ref(true);
@@ -33,11 +34,30 @@ const errorMsg = ref("");
 const selectedFormat = ref("pdf");
 
 const fetchReport = async () => {
+  if (!studentId) {
+    errorMsg.value = "学号参数缺失";
+    loading.value = false;
+    return;
+  }
+
   try {
     const res = await service.get(`/api/reports/${studentId}`);
-    reportContent.value = res.data.content;
+    // 确保 content 始终是字符串
+    let content = res.data?.content;
+
+    // 如果 content 是数组或对象，转换为字符串
+    if (Array.isArray(content)) {
+      content = content.join("\n");
+    } else if (typeof content === "object" && content !== null) {
+      content = JSON.stringify(content, null, 2);
+    } else if (typeof content !== "string") {
+      content = String(content || "报告内容为空");
+    }
+
+    reportContent.value = content || "报告内容为空";
   } catch (err) {
     errorMsg.value = err.response?.data?.detail || "获取报告失败";
+    reportContent.value = ""; // 清空内容，避免显示错误数据
   } finally {
     loading.value = false;
   }

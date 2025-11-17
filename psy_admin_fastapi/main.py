@@ -289,18 +289,16 @@ async def batch_import_students(
 
     # 4. 批量插入有效数据
     success_count = 0
-    test_record_count = 0
+    # test_record_count = 0  # 已移除：不再自动创建检测记录
     if valid_students:
         try:
             # 批量创建学生
             db_students = crud.batch_create_students(db, valid_students)
             success_count = len(valid_students)
             
-            # 为每个新创建的学生创建待处理的检测记录
-            student_ids = [student.id for student in db_students]
-            if student_ids:
-                crud.batch_create_test_records(db, student_ids)
-                test_record_count = len(student_ids)
+            # 不再自动为每个新创建的学生创建待处理的检测记录
+            # 检测记录应该在实际进行检测并上传数据时才创建
+            # 之前的自动创建逻辑已完全移除
         except Exception as e:
             db.rollback()
             raise HTTPException(status_code=500, detail=f"批量插入失败: {str(e)}")
@@ -308,12 +306,12 @@ async def batch_import_students(
     # 5. 返回详细结果
     return {
         "success_count": success_count,
-        "test_record_count": test_record_count,
+        # "test_record_count": test_record_count,  # 已移除：不再返回检测记录数量
         "duplicate_count": len(duplicate_students),
         "error_count": len(error_rows),
         "duplicate_students": duplicate_students,
         "error_rows": error_rows,
-        "detail": f"导入完成：成功 {success_count} 条学生，创建 {test_record_count} 条待处理检测记录，重复 {len(duplicate_students)} 条，错误 {len(error_rows)} 条"
+        "detail": f"导入完成：成功 {success_count} 条学生，重复 {len(duplicate_students)} 条，错误 {len(error_rows)} 条"
     }
 
 # 获取学生列表（支持筛选、排序、分页）
@@ -444,10 +442,21 @@ async def get_student_info(
 async def get_report(student_id: str, db: Session = Depends(get_db_session)):
     try:
         from services.report_service import generate_report_content
+        logger.info(f"开始生成报告，学号: {student_id}")
         content = generate_report_content(db, student_id)
+        logger.info(f"报告生成成功，学号: {student_id}")
         return {"content": content}
     except ValueError as e:
-        raise HTTPException(status_code=404, detail=str(e))
+        error_msg = str(e)
+        logger.warning(f"生成报告时出现ValueError，学号: {student_id}, 错误: {error_msg}")
+        # 如果学生不存在，返回404
+        if "not found" in error_msg.lower() or "Student not found" in error_msg:
+            raise HTTPException(status_code=404, detail=error_msg)
+        # 其他ValueError（如没有检测记录）也返回内容，但状态码为200
+        return {"content": error_msg}
+    except Exception as e:
+        logger.error(f"生成报告时出现未预期的错误，学号: {student_id}, 错误: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"生成报告失败: {str(e)}")
 
 @app.get("/api/reports/{student_id}/download")
 async def download_report(
@@ -794,13 +803,15 @@ async def update_test_record_status(
 # 批量生成报告API
 @app.post("/api/test-records/batch-generate-reports", summary="批量生成报告")
 async def batch_generate_reports(
-    record_ids: List[int],
-    format: str = "pdf",
+    request: schemas.BatchGenerateReportsRequest,
     db: Session = Depends(get_db_session),
     current_user: models.AdminUser = Depends(get_current_admin_user)
 ):
     """批量生成指定检测记录的报告"""
     try:
+        record_ids = request.record_ids
+        format = request.format
+        
         if not record_ids:
             raise HTTPException(status_code=400, detail="请提供要生成报告的记录ID列表")
         
@@ -823,9 +834,12 @@ async def batch_generate_reports(
                 # 生成报告内容
                 content = generate_report_content(db, record.student.student_id)
                 
+                # 获取学生姓名
+                student_name = record.student.name if record.student else "Student"
+                
                 # 根据格式生成对应文件
                 if format == "pdf":
-                    filepath = generate_pdf_report(content, record.student.student_id)
+                    filepath = generate_pdf_report(content, record.student.student_id, student_name)
                 elif format == "excel":
                     filepath = generate_excel_report(db, record.student.student_id)
                 
@@ -944,4 +958,4 @@ async def get_student_test_status(
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=8002)
+    uvicorn.run(app, host="0.0.0.0", port=8080)

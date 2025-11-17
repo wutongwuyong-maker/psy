@@ -4,7 +4,7 @@ import { ElMessage as Message } from "element-plus";
 import router from "./router";
 
 const service = axios.create({
-  baseURL: process.env.VUE_APP_API_BASE || "http://localhost:8002",
+  baseURL: process.env.VUE_APP_API_BASE || "http://localhost:8000",
   timeout: 10000,
 });
 

@@ -224,6 +224,11 @@ class TestRecordStatusUpdate(BaseModel):
     status: str  # 状态：pending, processing, completed, failed
     ai_summary: Optional[str] = None
 
+class BatchGenerateReportsRequest(BaseModel):
+    """批量生成报告请求"""
+    record_ids: List[int]
+    format: str = "pdf"  # pdf 或 excel
+
 class TestRecordBatchStatus(BaseModel):
     """批量状态查询响应"""
     records: List[TestRecordStatus]

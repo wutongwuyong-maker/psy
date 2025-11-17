@@ -141,8 +141,8 @@
       ref="scrollContainer"
     >
       <div
-        v-for="r in records"
-        :key="r.id"
+        v-for="(r, index) in records"
+        :key="r.id || index"
         class="record-card"
         :class="{ selected: selectedRecords.includes(r.id) }"
         @click="viewDetail(r.id)"
@@ -364,10 +364,12 @@ export default {
         params.append("limit", this.pageSize);
 
         const res = await service.get("/test-data/records/", { params });
-        this.records = res.data;
+        // 确保 records 始终是数组
+        const recordsData = Array.isArray(res.data) ? res.data : [];
+        this.records = recordsData;
 
         // 检查是否还有更多数据
-        if (res.data.length < this.pageSize) {
+        if (recordsData.length < this.pageSize) {
           this.hasMore = false;
         }
       } catch (err) {
@@ -697,7 +699,8 @@ export default {
           params.append("status", this.filterStatus);
 
         const res = await service.get("/test-data/records/", { params });
-        const newRecords = res.data;
+        // 确保 newRecords 始终是数组
+        const newRecords = Array.isArray(res.data) ? res.data : [];
 
         // 添加新记录到现有记录中
         this.records = [...this.records, ...newRecords];

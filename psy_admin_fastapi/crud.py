@@ -475,6 +475,33 @@ def delete_test_record(db: Session, record_id: int):
         db.commit()
     return True
 
+def delete_test_records(db: Session, record_ids: List[int]) -> int:
+    """
+    批量删除检测记录及其关联数据。
+    返回成功删除的记录数量。
+    """
+    if not record_ids:
+        return 0
+
+    records = db.query(models.Test).filter(models.Test.id.in_(record_ids)).all()
+    if not records:
+        return 0
+
+    ids = [record.id for record in records]
+
+    db.query(models.PhysiologicalData).filter(
+        models.PhysiologicalData.test_fk_id.in_(ids)
+    ).delete(synchronize_session=False)
+    db.query(models.Score).filter(
+        models.Score.test_fk_id.in_(ids)
+    ).delete(synchronize_session=False)
+
+    for record in records:
+        db.delete(record)
+
+    db.commit()
+    return len(records)
+
 # --- 状态管理相关 CRUD 函数 ---
 
 def get_test_record_status(db: Session, record_id: int):

@@ -866,6 +866,25 @@ async def batch_generate_reports(
         logger.error(f"批量生成报告失败: {e}")
         raise HTTPException(status_code=500, detail=f"批量生成报告失败: {str(e)}")
 
+@app.delete("/api/test-records/batch", summary="批量删除检测记录")
+async def batch_delete_test_records(
+    request: schemas.BatchDeleteTestRecordsRequest,
+    db: Session = Depends(get_db_session),
+    current_user: models.AdminUser = Depends(get_current_admin_user)
+):
+    """批量删除检测记录及其关联数据"""
+    try:
+        if not request.record_ids:
+            raise HTTPException(status_code=400, detail="请提供要删除的记录ID列表")
+
+        deleted_count = crud.delete_test_records(db, request.record_ids)
+        return {"deleted_count": deleted_count}
+    except HTTPException as e:
+        raise e
+    except Exception as e:
+        logger.error(f"批量删除检测记录失败: {e}")
+        raise HTTPException(status_code=500, detail=f"批量删除检测记录失败: {str(e)}")
+
 # === 客户端对接接口 ===
 
 @app.post("/api/client/validate-student", response_model=schemas.StudentValidateResponse, summary="客户端学号验证")

@@ -77,6 +77,9 @@
         <button @click="batchUpdateStatus" class="filter-btn">
           批量更新状态
         </button>
+        <button @click="batchDeleteRecords" class="filter-btn danger">
+          批量删除
+        </button>
         <button @click="clearSelection" class="filter-btn">取消选择</button>
       </div>
 
@@ -523,6 +526,32 @@ export default {
       }
     },
 
+    async batchDeleteRecords() {
+      if (this.selectedRecords.length === 0) {
+        alert("请先选择要删除的记录");
+        return;
+      }
+
+      const confirmed = window.confirm(
+        `确定删除选中的 ${this.selectedRecords.length} 条检测记录吗？此操作不可恢复。`
+      );
+      if (!confirmed) return;
+
+      try {
+        const response = await service.delete("/api/test-records/batch", {
+          data: { record_ids: this.selectedRecords },
+        });
+        const deletedCount = response?.data?.deleted_count ?? 0;
+        alert(`成功删除 ${deletedCount} 条检测记录`);
+        this.clearSelection();
+        this.fetchRecords();
+      } catch (error) {
+        alert(
+          "批量删除失败：" + (error.response?.data?.detail || error.message)
+        );
+      }
+    },
+
     getStatusText(status) {
       const statusMap = {
         pending: "待处理",
@@ -762,6 +791,10 @@ export default {
 }
 .filter-btn.primary {
   background: var(--accent);
+  color: #fff;
+}
+.filter-btn.danger {
+  background: #f56c6c;
   color: #fff;
 }
 

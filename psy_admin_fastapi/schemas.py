@@ -229,6 +229,10 @@ class BatchGenerateReportsRequest(BaseModel):
     record_ids: List[int]
     format: str = "pdf"  # pdf 或 excel
 
+class BatchDeleteTestRecordsRequest(BaseModel):
+    """批量删除检测记录请求"""
+    record_ids: List[int]
+
 class TestRecordBatchStatus(BaseModel):
     """批量状态查询响应"""
     records: List[TestRecordStatus]

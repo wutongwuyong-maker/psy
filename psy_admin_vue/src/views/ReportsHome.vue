@@ -8,7 +8,7 @@
         </el-form-item>
         <el-form-item>
           <el-button type="primary" @click="go">查看报告</el-button>
-          <button @click="go" class="el-button el-button--primary">
+          <button v-if="false" @click="go" class="el-button el-button--primary">
             测试按钮
           </button>
         </el-form-item>

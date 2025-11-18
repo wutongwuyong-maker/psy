@@ -33,12 +33,12 @@
       </select>
       <input v-model="filterStartDate" type="date" class="filter-input" />
       <input v-model="filterEndDate" type="date" class="filter-input" />
-      <select v-model="filterIsAbnormal" class="filter-input">
+      <select v-if="false" v-model="filterIsAbnormal" class="filter-input">
         <option :value="null">全部</option>
         <option :value="true">异常</option>
         <option :value="false">正常</option>
       </select>
-      <select v-model="filterStatus" class="filter-input">
+      <select v-if="false" v-model="filterStatus" class="filter-input">
         <option :value="null">全部状态</option>
         <option value="pending">待处理</option>
         <option value="processing">处理中</option>
@@ -54,7 +54,7 @@
       </button>
 
       <!-- 数据导出按钮 -->
-      <div class="export-actions">
+      <div v-if="false" class="export-actions">
         <button @click="exportStudents" class="filter-btn primary">
           导出学生数据
         </button>
@@ -170,7 +170,7 @@
           <p class="summary">{{ truncateText(r.ai_summary, 30) }}</p>
 
           <!-- 状态标签 -->
-          <div class="status-tags">
+          <div v-if="false" class="status-tags">
             <!-- 只有非待处理状态才显示正常/异常标签 -->
             <div
               v-if="r.status !== 'pending'"

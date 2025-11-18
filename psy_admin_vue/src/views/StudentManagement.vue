@@ -29,7 +29,9 @@
         <option value="desc">降序</option>
       </select>
 
-      <button @click="fetchStudents" class="filter-btn primary">筛选</button>
+      <button v-if="false" @click="fetchStudents" class="filter-btn primary">
+        筛选
+      </button>
       <button @click="resetFilters" class="filter-btn">重置</button>
       <button @click="openImportModal" class="filter-btn primary">
         导入Excel

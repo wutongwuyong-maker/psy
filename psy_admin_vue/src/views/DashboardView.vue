@@ -102,7 +102,9 @@
       <template #header>
         <div class="card-header">
           <span>最近检测记录</span>
-          <el-button type="primary" @click="exportData">导出数据</el-button>
+          <el-button v-if="false" type="primary" @click="exportData">
+            导出数据
+          </el-button>
         </div>
       </template>
       <el-table :data="recentRecords" border stripe v-loading="loading">

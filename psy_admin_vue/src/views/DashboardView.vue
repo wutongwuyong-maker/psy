@@ -77,7 +77,7 @@
       -->
 
       <!-- 异常分布图 -->
-      <el-card class="chart-card">
+      <el-card v-if="false" class="chart-card">
         <template #header>
           <div class="card-header">
             <span>异常状态分布</span>

@@ -20,7 +20,10 @@
         <template #header>
           <div class="card-header">
             <span>检测基本信息</span>
-            <el-tag :type="record.is_abnormal ? 'danger' : 'success'">
+            <el-tag
+              v-if="false"
+              :type="record.is_abnormal ? 'danger' : 'success'"
+            >
               {{ record.is_abnormal ? "异常" : "正常" }}
             </el-tag>
           </div>
